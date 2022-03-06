@@ -139,7 +139,7 @@ def shape_cd_loss(pts, trans1, trans2, quat1, quat2, valids):
     pts2 = pts2.flatten(1, 2)
     # TODO: the padded 0 points may break the chamfer here?
     # TODO: i.e. some points' corresponding points is the padded points
-    dist1, dist2 = chamfer_distance(pts1, pts2, transpose=False)  # [B, P*N]
+    dist1, dist2 = chamfer_distance(pts1, pts2)  # [B, P*N]
 
     valids = valids.float().detach()
     valids = valids.unsqueeze(2).repeat(1, 1, num_points).view(batch_size, -1)
