@@ -60,8 +60,11 @@ class PartNetPartDataset(Dataset):
             'part_pcs': MAX_NUM x N x 3
                 The points sampled from each part.
 
-            'part_poses': MAX_NUM x (3 + 4)
-                Pose as [translation, quaternion].
+            'part_trans': MAX_NUM x 3
+                Translation vector
+
+            'part_quat': MAX_NUM x 4
+                Rotation as quaternion.
 
             'part_valids': MAX_NUM
                 1 for shape parts, 0 for padded zeros.
@@ -118,7 +121,9 @@ class PartNetPartDataset(Dataset):
 
             elif key == 'part_poses':
                 cur_pose = cur_data['part_poses']  # p x (3 + 4)
-                data_dict['part_poses'] = self._pad_data(cur_pose)
+                cur_pose = self._pad_data(cur_pose)
+                data_dict['part_trans'] = cur_pose[:, :3]
+                data_dict['part_quat'] = cur_pose[:, 3:]
 
             elif key == 'part_valids':
                 out = np.zeros((self.max_num_part), dtype=np.float32)

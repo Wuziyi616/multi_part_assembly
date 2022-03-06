@@ -1,6 +1,5 @@
 import torch
 import chamfer_cuda
-import ipdb
 
 
 def safe_sqrt(x, eps=1e-12):
@@ -14,11 +13,9 @@ class ChamferDistanceFunction(torch.autograd.Function):
         xyz1 = xyz1.contiguous()
         xyz2 = xyz2.contiguous()
         assert xyz1.is_cuda and xyz2.is_cuda, "Only support cuda currently."
-        # ipdb.set_trace()
 
         dist1, idx1, dist2, idx2 = chamfer_cuda.chamfer_forward(xyz1, xyz2)
         ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
-        # ipdb.set_trace()
         return dist1, dist2
 
     @staticmethod
@@ -29,16 +26,15 @@ class ChamferDistanceFunction(torch.autograd.Function):
         assert grad_dist1.is_cuda and grad_dist2.is_cuda, "Only support cuda currently."
         grad_xyz1, grad_xyz2 = chamfer_cuda.chamfer_backward(
             grad_dist1, grad_dist2, xyz1, xyz2, idx1, idx2)
-        # ipdb.set_trace()
         return grad_xyz1, grad_xyz2
 
 
-def chamfer_distance(xyz1, xyz2, transpose=True, sqrt=False, eps=1e-12):
+def chamfer_distance(xyz1, xyz2, transpose=False, sqrt=False, eps=1e-12):
     """Chamfer distance
 
     Args:
-        xyz1 (torch.Tensor): (b, 3, n1)
-        xyz2 (torch.Tensor): (b, 3, n1)
+        xyz1 (torch.Tensor): (b, n1, 3)
+        xyz2 (torch.Tensor): (b, n1, 3)
         transpose (bool): whether to transpose inputs as it might be BCN format.
             Extensions only support BNC format.
         sqrt (bool): whether to square root distance
@@ -61,7 +57,6 @@ def chamfer_distance(xyz1, xyz2, transpose=True, sqrt=False, eps=1e-12):
     if sqrt:
         dist1 = safe_sqrt(dist1, eps)
         dist2 = safe_sqrt(dist2, eps)
-    # ipdb.set_trace()
     return dist1, dist2
 
 

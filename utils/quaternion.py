@@ -43,7 +43,7 @@ def qrot(q, v):
     assert v.shape[-1] == 3
 
     # repeat to e.g. apply the same quat for all points in a point cloud
-    # [4] --> [N, 4] or [B, 4] --> [B, N, 4]
+    # [4] --> [N, 4], [B, 4] --> [B, N, 4], [B, P, 4] --> [B, P, N, 4]
     if len(q.shape) == len(v.shape) - 1:
         q = q.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
 
@@ -112,6 +112,29 @@ def qeuler(q, order, epsilon=0):
     return torch.stack((x, y, z), dim=1).view(original_shape)
 
 
+def qtransform(t, q, v):
+    """
+    Rotate vector(s) v about the rotation described by quaternion(s) q,
+        and then translate it by the translation described by t.
+    Expects a tensor of shape (*, 3) for t, a tensor of shape (*, 4) for q and
+        a tensor of shape (*, 3) for v, where * denotes any dimensions.
+    Returns a tensor of shape (*, 3).
+    """
+    assert t.shape[-1] == 3
+
+    # repeat to e.g. apply the same trans for all points in a point cloud
+    # [3] --> [N, 3], [B, 3] --> [B, N, 3], [B, P, 3] --> [B, P, N, 3]
+    if len(t.shape) == len(v.shape) - 1:
+        t = t.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
+
+    assert q.shape[:] == v.shape[:]
+
+    qv = qrot(q, v)
+    tqv = qv + t
+
+    return tqv
+
+
 # Numpy-backed implementations
 
 
@@ -136,12 +159,19 @@ def qeuler_np(q, order, epsilon=0, use_gpu=False):
         return qeuler(q, order, epsilon).numpy()
 
 
+def qtransform_np(t, q, v):
+    t = torch.from_numpy(t).contiguous()
+    q = torch.from_numpy(q).contiguous()
+    v = torch.from_numpy(v).contiguous()
+    return qtransform(t, q, v).numpy()
+
+
 def qfix(q):
     """
     Enforce quaternion continuity across the time dimension by selecting
     the representation (q or -q) with minimal distance (or, equivalently, maximal dot product)
     between two consecutive frames.
-    
+
     Expects a tensor of shape (L, J, 4), where L is the sequence length and J is the number of joints.
     Returns a tensor of the same shape.
     """

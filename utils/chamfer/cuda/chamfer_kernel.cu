@@ -6,6 +6,10 @@ v1.2.0: AT_CHECK -> TORCH_CHECK
 #ifndef _CHAMFER_KERNEL
 #define _CHAMFER_KERNEL
 
+#ifndef AT_CHECK
+#define AT_CHECK TORCH_CHECK 
+#endif
+
 #include <cmath>
 #include <vector>
 
