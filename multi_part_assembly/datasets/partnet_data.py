@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 
 class PartNetPartDataset(Dataset):
@@ -23,7 +23,7 @@ class PartNetPartDataset(Dataset):
         # array of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
         self.shape_ids = np.load(os.path.join(self.data_dir, data_fn))
 
-        # the keys of data to load, e.g. ('part_pcs', 'part_poses')
+        # additional data to load, e.g. ('part_ids', 'instance_label')
         self.data_keys = data_keys
 
     def _rand_another(self):
@@ -53,8 +53,6 @@ class PartNetPartDataset(Dataset):
         `cur_data` is dict stored in separate npz files with following keys:
             'part_pcs', 'part_poses', 'part_ids', 'geo_part_ids', 'sym'
         """
-
-        data_dict = {}
         """
         data_dict = {
             'part_pcs': MAX_NUM x N x 3
@@ -114,26 +112,24 @@ class PartNetPartDataset(Dataset):
         }
         """
 
+        data_dict = {}
+        # part point clouds
+        cur_pts = cur_data['part_pcs']  # p x N x 3
+        data_dict['part_pcs'] = self._pad_data(cur_pts)
+        # part poses
+        cur_pose = cur_data['part_poses']  # p x (3 + 4)
+        cur_pose = self._pad_data(cur_pose)
+        data_dict['part_trans'] = cur_pose[:, :3]
+        data_dict['part_quat'] = cur_pose[:, 3:]
+        # valid part masks
+        valids = np.zeros((self.max_num_part), dtype=np.float32)
+        valids[:num_parts] = 1
+        data_dict['part_valids'] = valids
+        # shape_id
+        data_dict['shape_id'] = int(shape_id)
+
         for key in self.data_keys:
-            if key == 'part_pcs':
-                cur_pts = cur_data['part_pcs']  # p x N x 3
-                data_dict['part_pcs'] = self._pad_data(cur_pts)
-
-            elif key == 'part_poses':
-                cur_pose = cur_data['part_poses']  # p x (3 + 4)
-                cur_pose = self._pad_data(cur_pose)
-                data_dict['part_trans'] = cur_pose[:, :3]
-                data_dict['part_quat'] = cur_pose[:, 3:]
-
-            elif key == 'part_valids':
-                out = np.zeros((self.max_num_part), dtype=np.float32)
-                out[:num_parts] = 1
-                data_dict['part_valids'] = out
-
-            elif key == 'shape_id':
-                data_dict['shape_id'] = shape_id
-
-            elif key == 'part_ids':
+            if key == 'part_ids':
                 cur_part_ids = cur_data['geo_part_ids']  # p
                 data_dict['part_ids'] = self._pad_data(cur_part_ids)
 
@@ -191,3 +187,38 @@ class PartNetPartDataset(Dataset):
 
     def __len__(self):
         return len(self.shape_ids)
+
+
+def build_partnet_dataloader(cfg):
+    train_set = PartNetPartDataset(
+        data_dir=cfg.data.data_dir,
+        data_fn=cfg.data.data_fn.format('train'),
+        data_keys=cfg.data.data_keys,
+        max_num_part=cfg.data.max_num_part,
+    )
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=cfg.exp.batch_size,
+        shuffle=True,
+        num_workers=cfg.exp.num_workers,
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=(cfg.exp.num_workers > 0),
+    )
+
+    val_set = PartNetPartDataset(
+        data_dir=cfg.data.data_dir,
+        data_fn=cfg.data.data_fn.format('val'),
+        data_keys=cfg.data.data_keys,
+        max_num_part=cfg.data.max_num_part,
+    )
+    val_loader = DataLoader(
+        dataset=val_set,
+        batch_size=cfg.exp.batch_size,
+        shuffle=False,
+        num_workers=cfg.exp.num_workers,
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=(cfg.exp.num_workers > 0),
+    )
+    return train_loader, val_loader

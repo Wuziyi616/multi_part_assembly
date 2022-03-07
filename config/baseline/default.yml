@@ -1,0 +1,31 @@
+exp:
+    name: 'baseline'
+    weight_file: ''
+    num_workers: 8
+    batch_size: 32
+    num_epochs: 200
+    val_every: 5
+
+model:
+    encoder: 'pointnet'
+    pc_feat_dim: 512
+    transformer_feat_dim: 1024
+    transformer_heads: 4
+    transformer_layers: 1
+    noise_dim: 32
+
+loss:
+    use_rot_pt_l2_loss: False
+    use_rot_pt_cd_loss: False
+    use_transform_pt_cd_loss: True
+
+data:
+    root_dir: '../part_assembly/Generative-3D-Part-Assembly/prepare_data'
+    data_fn: 'Chair.{}.npy'
+    data_keys: ('part_ids', 'instance_label', 'match_ids')
+
+optimizer:
+    lr: 1e-3
+    weight_decay: 0.
+    warmup_ratio: 0.05
+    clip_grad: null

@@ -28,3 +28,40 @@ def build_transformer_encoder(d_model,
     transformer_encoder = nn.TransformerEncoder(
         encoder_layer=transformer_enc_layer, num_layers=num_layers, norm=norm)
     return transformer_encoder
+
+
+class TransformerEncoder(nn.Module):
+    """Transformer encoder with padding_mask."""
+
+    def __init__(self,
+                 d_model,
+                 num_heads,
+                 ffn_dim,
+                 num_layers,
+                 norm_first=True):
+        super().__init__()
+
+        self.transformer_encoder = build_transformer_encoder(
+            d_model=d_model,
+            num_heads=num_heads,
+            ffn_dim=ffn_dim,
+            num_layers=num_layers,
+            norm_first=norm_first)
+
+    def forward(self, tokens, valid_masks):
+        """Forward pass.
+
+        Args:
+            tokens: [B, N, C]
+            valid_masks: [B, N], 1 for valid, 0 for padded
+
+        Returns:
+            torch.Tensor: [B, N, C]
+        """
+        if valid_masks is not None:
+            assert valid_masks.shape[:] == tokens.shape[:2]
+            pad_masks = (1 - valid_masks).bool()  # 1 --> padding
+        else:
+            pad_masks = None
+        out = self.transformer_encoder(tokens, src_key_padding_mask=pad_masks)
+        return out

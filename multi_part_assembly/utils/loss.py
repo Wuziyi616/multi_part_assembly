@@ -72,7 +72,7 @@ def rot_cosine_loss(quat1, quat2, valids):
 
 
 def rot_points_l2_loss(pts, quat1, quat2, valids):
-    """L2 loss between point clouds transformed by quats.
+    """L2 distance between point clouds transformed by quats.
 
     Args:
         pts: [B, P, N, 3], model input point cloud to be transformed

@@ -1,15 +1,16 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Regressor(nn.Module):
+class PoseRegressor(nn.Module):
     """MLP-based regressor for translation and quaterion prediction."""
 
-    def __init__(self, pc_feat_dim):
+    def __init__(self, feat_dim):
         super().__init__()
 
         self.fc_layers = nn.Sequential(
-            nn.Linear(pc_feat_dim, 256),
+            nn.Linear(feat_dim, 256),
             nn.BatchNorm1d(256),
             nn.LeakyReLU(0.2),
             nn.Linear(256, 128),
@@ -30,3 +31,19 @@ class Regressor(nn.Module):
         quat = F.normalize(quat, p=2, dim=-1)
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]
         return quat, trans
+
+
+class StocasticPoseRegressor(PoseRegressor):
+    """Stochastic pose regressor with noise injection."""
+
+    def __init__(self, feat_dim, noise_dim):
+        super().__init__(feat_dim + noise_dim)
+
+        self.noise_dim = noise_dim
+
+    def forward(self, x):
+        """x: [B, C] or [B, P, C]"""
+        noise_shape = list(x.shape[:-1]) + [self.noise_dim, ]
+        noise = torch.randn(noise_shape).type_as(x)
+        x = torch.cat([x, noise], dim=-1)
+        return super().forward(x)
