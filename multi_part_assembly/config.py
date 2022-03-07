@@ -11,9 +11,9 @@ _C.exp.weight_file = ''
 _C.exp.gpus = [
     0,
 ]
-_C.exp.num_workers = 8
-_C.exp.batch_size = 32
-_C.exp.num_epochs = 1000
+_C.exp.num_workers = 4
+_C.exp.batch_size = 16
+_C.exp.num_epochs = 200
 _C.exp.val_every = 5  # evaluate model every n training epochs
 _C.exp.val_sample_vis = 5  # sample visualizations
 
@@ -31,7 +31,7 @@ _C.model.noise_dim = 32  # stochastic PoseRegressor
 _C.loss = CN()
 _C.loss.sample_iter = 5  # MoN loss sampling
 _C.loss.trans_loss_w = 1.
-_C.loss.rot_loss = 'l2'  # 'cosine'
+_C.loss.rot_loss = 'l2'  # 'cosine', ''
 _C.loss.rot_loss_w = 1.
 _C.loss.use_rot_pt_l2_loss = False
 _C.loss.rot_pt_l2_loss_w = 1.
@@ -42,7 +42,7 @@ _C.loss.transform_pt_cd_loss_w = 1.
 
 # Data related
 _C.data = CN()
-_C.data.data_dir = '../part_assembly/Generative-3D-Part-Assembly/prepare_data'
+_C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
 _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids')
 _C.data.num_pc_points = 1000

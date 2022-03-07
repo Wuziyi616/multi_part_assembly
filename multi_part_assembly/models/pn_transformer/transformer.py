@@ -59,7 +59,7 @@ class TransformerEncoder(nn.Module):
             torch.Tensor: [B, N, C]
         """
         if valid_masks is not None:
-            assert valid_masks.shape[:] == tokens.shape[:2]
+            assert valid_masks.shape == tokens.shape[:2]
             pad_masks = (1 - valid_masks).bool()  # 1 --> padding
         else:
             pad_masks = None

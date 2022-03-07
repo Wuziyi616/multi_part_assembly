@@ -1,13 +1,13 @@
 exp:
-    name: 'baseline'
-    weight_file: ''
-    num_workers: 8
-    batch_size: 32
+    name: "baseline"
+    weight_file: ""
+    num_workers: 4
+    batch_size: 16
     num_epochs: 200
     val_every: 5
 
 model:
-    encoder: 'pointnet'
+    encoder: "pointnet"
     pc_feat_dim: 512
     transformer_feat_dim: 1024
     transformer_heads: 4
@@ -15,13 +15,19 @@ model:
     noise_dim: 32
 
 loss:
+    trans_loss_w: 1.
+    rot_loss: "l2"
+    rot_loss_w: 1.
     use_rot_pt_l2_loss: False
+    rot_pt_l2_loss_w: 1.
     use_rot_pt_cd_loss: False
+    rot_pt_cd_loss_w: 1.
     use_transform_pt_cd_loss: True
+    transform_pt_cd_loss_w: 1.
 
 data:
-    root_dir: '../part_assembly/Generative-3D-Part-Assembly/prepare_data'
-    data_fn: 'Chair.{}.npy'
+    data_dir: "../Generative-3D-Part-Assembly/prepare_data"
+    data_fn: "Chair.{}.npy"
     data_keys: ('part_ids', 'instance_label', 'match_ids')
 
 optimizer:

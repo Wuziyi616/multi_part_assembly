@@ -127,7 +127,7 @@ def qtransform(t, q, v):
     if len(t.shape) == len(v.shape) - 1:
         t = t.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
 
-    assert q.shape[:] == v.shape[:]
+    assert t.shape == v.shape
 
     qv = qrot(q, v)
     tqv = qv + t

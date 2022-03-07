@@ -24,11 +24,13 @@ class PCAssemblyLogCallback(Callback):
             batch = next(iter(self.val_loader))
             batch = {k: v[:num].to(pl_module.device) for k, v in batch.items()}
             pl_module.eval()
-            gt_pcs, pred_pcs = pl_module.sample_assembly(batch)  # [num, N, 3]
-            gt_pcs += 1.5  # offset the GT point cloud to draw in one figure
-            pcs = np.concatenate([gt_pcs, pred_pcs], axis=1)  # [num, 2N, 3]
+            gt_pcs, pred_pcs = pl_module.sample_assembly(batch)  # [N, 3] list
+            # offset the GT point clouds to draw in one figure
+            for i in range(num):
+                gt_pcs[i][:, 0] = gt_pcs[i][:, 0] + 1.5
             log_dict = {
-                f'pc_{i}': wandb.Object3D(pc)
-                for i, pc in enumerate(pcs)
+                f'pc_{i}': wandb.Object3D(
+                    np.concatenate([gt_pcs[i], pred_pcs[i]], axis=0))
+                for i in range(num)
             }
             trainer.logger.experiment.log(log_dict, commit=True)

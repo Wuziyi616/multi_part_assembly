@@ -44,7 +44,10 @@ class PNTransformer(pl.LightningModule):
 
     def _init_encoder(self):
         encoder = build_encoder(
-            self.cfg.encoder, feat_dim=self.pc_feat_dim, global_feat=True)
+            self.cfg.model.encoder,
+            feat_dim=self.pc_feat_dim,
+            global_feat=True,
+        )
         return encoder
 
     def _init_corr_module(self):
@@ -61,7 +64,8 @@ class PNTransformer(pl.LightningModule):
         # concat feature, instance_label and noise as input
         pose_predictor = StocasticPoseRegressor(
             feat_dim=self.pc_feat_dim + self.max_num_part,
-            noise_dim=self.cfg.model.noise_dim)
+            noise_dim=self.cfg.model.noise_dim,
+        )
         return pose_predictor
 
     def forward(self, part_pcs, part_valids, instance_label):
@@ -132,8 +136,7 @@ class PNTransformer(pl.LightningModule):
         return loss_dict
 
     @torch.no_grad()
-    @staticmethod
-    def _linear_sum_assignment(pts, trans1, quat1, trans2, quat2):
+    def _linear_sum_assignment(self, pts, trans1, quat1, trans2, quat2):
         """Find the min-cose match between two groups of poses.
 
         Args:
@@ -224,12 +227,12 @@ class PNTransformer(pl.LightningModule):
         See GNN Assembly paper Sec 3.4, the MoN loss is sampling prediction
             several times and select the min one as final loss.
         """
-        part_pcs, part_valids = data_dict['part_pcs'], data_dict['part_valids']
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         instance_label = data_dict['instance_label']
 
         # prediction
-        out_dict = self.forward(part_pcs, part_valids, instance_label)
-        pred_trans, pred_quat = out_dict['quat'], out_dict['trans']
+        out_dict = self.forward(part_pcs, valids, instance_label)
+        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
 
         # matching
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
@@ -238,27 +241,22 @@ class PNTransformer(pl.LightningModule):
                                               gt_trans, gt_quat, match_ids)
 
         # computing loss
-        trans_loss = trans_l2_loss(pred_trans, gt_trans, part_valids)
+        trans_loss = trans_l2_loss(pred_trans, gt_trans, valids)
+        loss_dict = {'trans_loss': trans_loss}
         if self.rot_loss == 'l2':
-            rot_loss = rot_l2_loss(pred_quat, gt_quat, part_valids)
+            loss_dict['rot_loss'] = rot_l2_loss(pred_quat, gt_quat, valids)
         elif self.rot_loss == 'cosine':
-            rot_loss = rot_cosine_loss(pred_quat, gt_quat, part_valids)
-        else:
-            raise NotImplementedError
-        loss_dict = {
-            'trans_loss': trans_loss,  # [B]
-            'rot_loss': rot_loss,  # [B]
-        }
+            loss_dict['rot_loss'] = rot_cosine_loss(pred_quat, gt_quat, valids)
         if self.use_rot_pt_l2_loss:
             loss_dict['rot_pt_l2_loss'] = rot_points_l2_loss(
-                part_pcs, pred_quat, gt_quat, part_valids)  # [B]
+                part_pcs, pred_quat, gt_quat, valids)  # [B]
         if self.use_rot_pt_cd_loss:
             loss_dict['rot_pt_cd_loss'] = rot_points_cd_loss(
-                part_pcs, pred_quat, gt_quat, part_valids)  # [B]
+                part_pcs, pred_quat, gt_quat, valids)  # [B]
         if self.use_transform_pt_cd_loss:
             loss_dict['transform_pt_cd_loss'] = shape_cd_loss(
                 part_pcs, pred_trans, gt_trans, pred_quat, gt_quat,
-                part_valids)  # [B]
+                valids)  # [B]
 
         return loss_dict
 
@@ -329,10 +327,10 @@ class PNTransformer(pl.LightningModule):
 
     def sample_assembly(self, data_dict):
         """Sample assembly for visualization."""
-        part_pcs, part_valids = data_dict['part_pcs'], data_dict['part_valids']
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         instance_label = data_dict['instance_label']
-        out_dict = self.forward(part_pcs, part_valids, instance_label)
-        pred_trans, pred_quat = out_dict['quat'], out_dict['trans']
+        out_dict = self.forward(part_pcs, valids, instance_label)
+        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
 
         pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
@@ -340,12 +338,10 @@ class PNTransformer(pl.LightningModule):
         B, P, N, _ = part_pcs.shape
         pred_pcs_lst, gt_pcs_lst = [], []
         for i in range(B):
-            valid = part_valids[i].bool()  # [P]
+            valid = valids[i].bool()  # [P]
             pred, gt = pred_pcs[i], gt_pcs[i]  # [P, N, 3]
             pred = pred[valid].flatten(0, 1).cpu().numpy()
             gt = gt[valid].flatten(0, 1).cpu().numpy()  # [n*N, 3]
             pred_pcs_lst.append(pred)
             gt_pcs_lst.append(gt)
-        pred_pcs = np.stack(pred_pcs_lst, axis=0)
-        gt_pcs = np.stack(gt_pcs_lst, axis=0)
-        return gt_pcs, pred_pcs
+        return gt_pcs_lst, pred_pcs_lst

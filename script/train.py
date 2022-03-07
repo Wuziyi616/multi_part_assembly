@@ -1,4 +1,5 @@
 import os
+import pwd
 import argparse
 
 import pytorch_lightning as pl
@@ -8,6 +9,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from multi_part_assembly.config import get_cfg_defaults
 from multi_part_assembly.datasets import build_partnet_dataloader
 from multi_part_assembly.models import PNTransformer
+from multi_part_assembly.utils import PCAssemblyLogCallback
 
 
 def main(cfg):
@@ -22,13 +24,14 @@ def main(cfg):
     exp_name = cfg.exp.name
     cfg_name = os.path.basename(args.cfg_file)[:-4]  # remove '.yml'
     ckp_dir = os.path.join(cfg.exp.ckp_dir, exp_name, cfg_name, 'models')
-    os.makedirs(ckp_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)
 
     # on clusters, quota is limited
     # soft link temp space for checkpointing
     if not os.path.exists(ckp_dir):
+        usr = pwd.getpwuid(os.getuid())[0]
         os.system(r'ln -s /checkpoint/{}/{}/ {}'.format(
-            os.getlogin(), SLURM_JOB_ID, ckp_dir))
+            usr, SLURM_JOB_ID, ckp_dir))
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckp_dir,
@@ -37,6 +40,9 @@ def main(cfg):
         save_top_k=5,
         mode='min',
     )
+
+    # visualize assembly results
+    assembly_callback = PCAssemblyLogCallback(cfg, val_loader)
 
     logger_name = f'{exp_name}-{cfg_name}-{SLURM_JOB_ID}'
     logger = WandbLogger(
@@ -47,14 +53,15 @@ def main(cfg):
         logger=logger,
         gpus=all_gpus,
         strategy='ddp' if len(all_gpus) > 1 else None,
-        precision=16 if args.fp16 else 32,
         max_epochs=cfg.exp.num_epochs,
         callbacks=[
             LearningRateMonitor('epoch'),
             checkpoint_callback,
+            assembly_callback,
         ],
+        precision=16 if args.fp16 else 32,  # FP16 training
+        benchmark=args.cudnn,  # cudnn benchmark
         gradient_clip_val=cfg.optimizer.clip_grad,  # clip grad norm
-        track_grad_norm=2,  # track the l2 norm of gradients
         check_val_every_n_epoch=cfg.exp.val_every,
         log_every_n_steps=50,
         profiler='simple',  # training time bottleneck analysis
@@ -86,6 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--gpus', nargs='+', default=-1, type=int)
     parser.add_argument('--fp16', action='store_true')
+    parser.add_argument('--cudnn', action='store_true')
     args = parser.parse_args()
 
     cfg = get_cfg_defaults()

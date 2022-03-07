@@ -19,7 +19,7 @@ class PointNet2MSG(PointNet2SSG):
                 npoint=512,
                 radii=[0.1, 0.2, 0.4],
                 nsamples=[16, 32, 128],
-                mlps=[[3, 32, 32, 64], [3, 64, 64, 128], [3, 64, 96, 128]],
+                mlps=[[0, 32, 32, 64], [0, 64, 64, 128], [0, 64, 96, 128]],
                 use_xyz=True,
             ))
 

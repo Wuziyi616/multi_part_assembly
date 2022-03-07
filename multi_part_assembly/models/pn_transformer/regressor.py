@@ -26,7 +26,8 @@ class PoseRegressor(nn.Module):
 
     def forward(self, x):
         """x: [B, C] or [B, P, C]"""
-        f = self.fc_layers(x)
+        view_shape = list(x.shape[:-1]) + [-1, ]
+        f = self.fc_layers(x.view(-1, x.shape[-1])).view(view_shape)
         quat = self.rot_head(f)  # [B, 4] or [B, P, 4]
         quat = F.normalize(quat, p=2, dim=-1)
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]

@@ -23,7 +23,7 @@ class PointNet2SSG(nn.Module):
                 npoint=512,
                 radius=0.2,
                 nsample=64,
-                mlp=[3, 64, 64, 128],
+                mlp=[0, 64, 64, 128],
                 use_xyz=True,
             ))
         self.SA_modules.append(
