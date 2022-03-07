@@ -7,6 +7,8 @@
 # LICENSE file in the root directory of this source tree.
 #
 
+import copy
+
 import torch
 import numpy as np
 
@@ -256,6 +258,7 @@ def euler_to_quaternion(e, order):
 
 def get_sym_point(point, x, y, z):
     """Get the symmetry point along one or many of xyz axis."""
+    point = copy.deepcopy(point)
     if x == 1:
         point[..., 0] = -point[..., 0]
     if y == 1:

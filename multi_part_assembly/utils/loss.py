@@ -204,36 +204,43 @@ def calc_connectivity_acc(trans, quat, contact_points):
         [B], accuracy per data in the batch
     """
     B, P, _ = trans.shape
-    total_num = 0
-    count = 0
     thre = 0.01
 
     def get_min_l2_dist(points1, points2, trans1, trans2, quat1, quat2):
         """Compute the min L2 distance between two set of points."""
-        points1 = qtransform(trans1, quat1, points1)  # [m, 3]
-        points2 = qtransform(trans2, quat2, points2)  # [n, 3]
-        dist = ((points1[:, None] - points2[None, :])**2).sum(-1)  # [m, n]
-        return dist.min()
+        # points1/2: [num_contact, num_symmetry, 3]
+        # trans/quat: [num_contact, 3/4]
+        points1 = qtransform(trans1, quat1, points1)
+        points2 = qtransform(trans2, quat2, points2)
+        dist = ((points1[:, :, None] - points2[:, None, :])**2).sum(-1)
+        return dist.min(-1)[0].min(-1)[0]  # [num_contact]
 
+    # find all contact points
+    mask = (contact_points[..., 0] == 1)  # [B, P, P]
+    # points1 = contact_points[mask][..., 1:]
+    # TODO: more efficient way of getting paired contact points?
+    points1, points2, trans1, trans2, quat1, quat2 = [], [], [], [], [], []
     for b in range(B):
         for i in range(P):
             for j in range(P):
-                if contact_points[b, i, j, 0] != 1:
-                    continue
-                # contact point exists
-                p1 = contact_points[b, i, j, 1:]
-                p2 = contact_points[b, j, i, 1:]
-                # all possible symmetry equivalent of point
-                points1 = torch.stack(get_sym_point_list(p1))  # [n, 3]
-                points2 = torch.stack(get_sym_point_list(p2))
-                dist = get_min_l2_dist(points1, points2, trans[b, i],
-                                       trans[b, j], quat[b, i], quat[b, j])
-                if dist < thre:
-                    count += 1
-                total_num += 1
+                if mask[b, i, j]:
+                    points1.append(contact_points[b, i, j, 1:])
+                    points2.append(contact_points[b, j, i, 1:])
+                    trans1.append(trans[b, i])
+                    trans2.append(trans[b, j])
+                    quat1.append(quat[b, i])
+                    quat2.append(quat[b, j])
+    points1 = torch.stack(points1, dim=0)  # [n, 3]
+    points2 = torch.stack(points2, dim=0)  # [n, 3]
+    # [n, 3/4], corresponding translation and rotation
+    trans1, trans2 = torch.stack(trans1, dim=0), torch.stack(trans2, dim=0)
+    quat1, quat2 = torch.stack(quat1, dim=0), torch.stack(quat2, dim=0)
+    points1 = torch.stack(get_sym_point_list(points1), dim=1)  # [n, sym, 3]
+    points2 = torch.stack(get_sym_point_list(points2), dim=1)  # [n, sym, 3]
+    dist = get_min_l2_dist(points1, points2, trans1, trans2, quat1, quat2)
+    acc = (dist < thre).sum().float() / float(dist.numel())
 
     # the official code is doing avg per-contact_point acc (not per-shape)
     # so we tile the `acc` to [B]
-    acc = count / total_num
-    acc = (torch.ones(B) * acc).type_as(trans)
+    acc = torch.ones(B).type_as(trans) * acc
     return acc
