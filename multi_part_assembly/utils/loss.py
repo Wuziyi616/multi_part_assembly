@@ -1,6 +1,6 @@
 import torch
 
-from .quaternion import qrot, qtransform
+from .transforms import qrot, qtransform, get_sym_point_list
 from .chamfer import chamfer_distance
 
 
@@ -148,3 +148,92 @@ def shape_cd_loss(pts, trans1, trans2, quat1, quat2, valids):
     # TODO: should use `_valid_mean` instead of directly taking mean?
     loss_per_data = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)
     return loss_per_data
+
+
+def calc_part_acc(pts, trans1, trans2, quat1, quat2, valids):
+    """Compute the `Part Accuracy` in the paper.
+
+    We compute the per-part chamfer distance, and the distance lower than a
+        threshold will be considered as correct.
+
+    Args:
+        pts: [B, P, N, 3], model input point cloud to be transformed
+        trans1: [B, P, 3]
+        trans2: [B, P, 3]
+        quat1: [B, P, 4]
+        quat2: [B, P, 4]
+        valids: [B, P], 1 for input parts, 0 for padded parts
+
+    Returns:
+        [B], accuracy per data in the batch
+    """
+    B, P, N, _ = pts.shape
+
+    pts1 = qtransform(trans1, quat1, pts)  # [B, P, N, 3]
+    pts2 = qtransform(trans2, quat2, pts)
+
+    pts1 = pts1.flatten(0, 1)  # [B*P, N, 3]
+    pts2 = pts2.flatten(0, 1)
+    dist1, dist2 = chamfer_distance(pts1, pts2)  # [B*P, N]
+    loss_per_data = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)
+    loss_per_data = loss_per_data.view(B, P).type_as(pts)
+
+    # part with CD < `thre` is considered correct
+    thre = 0.01
+    acc = (loss_per_data < thre) & (valids == 1)
+    # the official code is doing avg per-shape acc (not per-part)
+    acc = acc.sum(-1) / (valids == 1).sum(-1)
+    return acc
+
+
+def calc_connectivity_acc(trans, quat, contact_points):
+    """Compute the `Connectivity Accuracy` in the paper.
+
+    We transform pre-computed connected point pairs using predicted pose, then
+        we compare the distance between them.
+    Distance lower than a threshold will be considered as correct.
+
+    Args:
+        trans: [B, P, 3]
+        quat: [B, P, 4]
+        contact_points: [B, P, P, 4], pairwise contact matrix.
+            First item is 1 --> two parts are connecting, 0 otherwise.
+            Last three items are the contacting point coordinate.
+
+    Returns:
+        [B], accuracy per data in the batch
+    """
+    B, P, _ = trans.shape
+    total_num = 0
+    count = 0
+    thre = 0.01
+
+    def get_min_l2_dist(points1, points2, trans1, trans2, quat1, quat2):
+        """Compute the min L2 distance between two set of points."""
+        points1 = qtransform(trans1, quat1, points1)  # [m, 3]
+        points2 = qtransform(trans2, quat2, points2)  # [n, 3]
+        dist = ((points1[:, None] - points2[None, :])**2).sum(-1)  # [m, n]
+        return dist.min()
+
+    for b in range(B):
+        for i in range(P):
+            for j in range(P):
+                if contact_points[b, i, j, 0] != 1:
+                    continue
+                # contact point exists
+                p1 = contact_points[b, i, j, 1:]
+                p2 = contact_points[b, j, i, 1:]
+                # all possible symmetry equivalent of point
+                points1 = torch.stack(get_sym_point_list(p1))  # [n, 3]
+                points2 = torch.stack(get_sym_point_list(p2))
+                dist = get_min_l2_dist(points1, points2, trans[b, i],
+                                       trans[b, j], quat[b, i], quat[b, j])
+                if dist < thre:
+                    count += 1
+                total_num += 1
+
+    # the official code is doing avg per-contact_point acc (not per-shape)
+    # so we tile the `acc` to [B]
+    acc = count / total_num
+    acc = (torch.ones(B) * acc).type_as(trans)
+    return acc

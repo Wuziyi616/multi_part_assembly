@@ -1,3 +1,5 @@
+"""Transformation functions. Adopted from https://github.com/hyperplane-lab/Generative-3D-Part-Assembly."""
+
 # Copyright (c) 2018-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -250,3 +252,33 @@ def euler_to_quaternion(e, order):
         result *= -1
 
     return result.reshape(original_shape)
+
+
+def get_sym_point(point, x, y, z):
+    """Get the symmetry point along one or many of xyz axis."""
+    if x == 1:
+        point[..., 0] = -point[..., 0]
+    if y == 1:
+        point[..., 1] = -point[..., 1]
+    if z == 1:
+        point[..., 2] = -point[..., 2]
+    return point
+
+
+def get_sym_point_list(point, sym=None):
+    """Get all poissible symmetry point as a list.
+    `sym` is a list indicating the symmetry axis of point.
+    """
+    if sym is None:
+        sym = [1, 1, 1]
+    else:
+        if not isinstance(sym, (list, tuple)):
+            sym = sym.tolist()
+        sym = [int(i) for i in sym]
+    point_list = []
+    for x in range(sym[0] + 1):
+        for y in range(sym[1] + 1):
+            for z in range(sym[2] + 1):
+                point_list.append(get_sym_point(point, x, y, z))
+
+    return point_list

@@ -16,19 +16,19 @@ model:
 
 loss:
     trans_loss_w: 1.
-    rot_loss: "l2"
+    rot_loss: ""
     rot_loss_w: 1.
     use_rot_pt_l2_loss: False
     rot_pt_l2_loss_w: 1.
-    use_rot_pt_cd_loss: False
+    use_rot_pt_cd_loss: True
     rot_pt_cd_loss_w: 10.
     use_transform_pt_cd_loss: True
-    transform_pt_cd_loss_w: 10.
+    transform_pt_cd_loss_w: 1.
 
 data:
     data_dir: "../Generative-3D-Part-Assembly/prepare_data"
     data_fn: "Chair.{}.npy"
-    data_keys: ('part_ids', 'instance_label', 'match_ids')
+    data_keys: ('part_ids', 'instance_label', 'match_ids', 'contact_points')
 
 optimizer:
     lr: 1e-3

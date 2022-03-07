@@ -28,23 +28,25 @@ _C.model.transformer_pre_ln = True
 _C.model.noise_dim = 32  # stochastic PoseRegressor
 
 # Loss related
+# default setting follows GNN paper, use L2 trans loss, CD of rotated parts and
+# CD of transformed whole shapes
 _C.loss = CN()
 _C.loss.sample_iter = 5  # MoN loss sampling
 _C.loss.trans_loss_w = 1.
-_C.loss.rot_loss = 'l2'  # 'cosine', ''
+_C.loss.rot_loss = ''  # 'cosine', 'l2'
 _C.loss.rot_loss_w = 1.
 _C.loss.use_rot_pt_l2_loss = False
 _C.loss.rot_pt_l2_loss_w = 1.
-_C.loss.use_rot_pt_cd_loss = False
+_C.loss.use_rot_pt_cd_loss = True
 _C.loss.rot_pt_cd_loss_w = 10.
-_C.loss.use_transform_pt_cd_loss = False
-_C.loss.transform_pt_cd_loss_w = 10.
+_C.loss.use_transform_pt_cd_loss = True
+_C.loss.transform_pt_cd_loss_w = 1.
 
 # Data related
 _C.data = CN()
 _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
-_C.data.data_keys = ('part_ids', 'instance_label', 'match_ids')
+_C.data.data_keys = ('part_ids', 'instance_label', 'match_ids', 'contact_points')
 _C.data.num_pc_points = 1000
 _C.data.max_num_part = 20
 

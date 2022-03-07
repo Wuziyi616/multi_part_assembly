@@ -6,10 +6,11 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from multi_part_assembly.models.encoder import build_encoder
-from multi_part_assembly.utils.quaternion import qtransform
+from multi_part_assembly.utils.transforms import qtransform
 from multi_part_assembly.utils.chamfer import chamfer_distance
 from multi_part_assembly.utils.loss import trans_l2_loss, rot_l2_loss, \
-    rot_cosine_loss, rot_points_l2_loss, rot_points_cd_loss, shape_cd_loss
+    rot_cosine_loss, rot_points_l2_loss, rot_points_cd_loss, shape_cd_loss, \
+    calc_part_acc, calc_connectivity_acc
 
 from .transformer import TransformerEncoder
 from .regressor import StocasticPoseRegressor
@@ -68,28 +69,41 @@ class PNTransformer(pl.LightningModule):
         )
         return pose_predictor
 
-    def forward(self, part_pcs, part_valids, instance_label):
+    def forward(self, data_dict):
         """Forward pass to predict poses for each part.
 
         Args:
-            part_pcs: [B, P, N, 3]
-            part_valids: [B, P]
-            instance_label: [B, P, P]
+            data_dict shoud contains:
+                - part_pcs: [B, P, N, 3]
+                - part_valids: [B, P], 1 are valid parts, 0 are padded parts
+                - instance_label: [B, P, P]
+            may contains:
+                - pre_pose_feats: [B, P, C'] (reused) or None
         """
-        B, P, N, _ = part_pcs.shape
-        # shared-weight encoder
-        pcs = part_pcs.flatten(0, 1)  # [B*P, N, 3]
-        pc_feats = self.encoder(pcs).unflatten(0, (B, P))  # [B, P, C]
-        # transformer feature fusion
-        pc_feats = self.corr_module(pc_feats, part_valids)  # [B, P, C]
-        # MLP predict poses
-        instance_label = instance_label.type_as(pc_feats)
-        feats = torch.cat([pc_feats, instance_label], dim=-1)  # [B, P, C+P]
+        feats = data_dict.get('pre_pose_feats', None)
+
+        if feats is None:
+            part_pcs = data_dict['part_pcs']
+            part_valids = data_dict['part_valids']
+            inst_label = data_dict['instance_label']
+            B, P, N, _ = part_pcs.shape
+            valid_mask = (part_valids == 1)
+            # shared-weight encoder
+            valid_pcs = part_pcs[valid_mask]  # [n, N, 3]
+            valid_feats = self.encoder(valid_pcs)  # [n, C]
+            pc_feats = torch.zeros(B, P, self.pc_feat_dim).type_as(valid_feats)
+            pc_feats[valid_mask] = valid_feats
+            # transformer feature fusion
+            pc_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
+            # MLP predict poses
+            inst_label = inst_label.type_as(pc_feats)
+            feats = torch.cat([pc_feats, inst_label], dim=-1)  # [B, P, C']
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {
             'quat': quat,  # [B, P, 4]
             'trans': trans,  # [B, P, 3]
+            'pre_pose_feats': feats,  # [B, P, C']
         }
         return pred_dict
 
@@ -184,6 +198,9 @@ class PNTransformer(pl.LightningModule):
         """
         max_num_part = self.max_num_part
         match_ids = match_ids.long()
+        # gt to be modified
+        new_gt_trans = gt_trans.detach().clone()
+        new_gt_quat = gt_quat.detach().clone()
 
         # iterate over batch
         for ind in range(part_pcs.shape[0]):
@@ -210,55 +227,77 @@ class PNTransformer(pl.LightningModule):
                     cur_gt_quat)
 
                 # since row_idx is sorted, we can directly rearrange GT
-                gt_trans[ind, need_to_match_part] = \
+                new_gt_trans[ind, need_to_match_part] = \
                     gt_trans[ind, need_to_match_part][matched_gt_ids]
-                gt_quat[ind, need_to_match_part] = \
+                new_gt_quat[ind, need_to_match_part] = \
                     gt_quat[ind, need_to_match_part][matched_gt_ids]
 
-        return gt_trans, gt_quat
+        return new_gt_trans, new_gt_quat
 
-    def _loss_function(self, data_dict):
+    def _loss_function(self, data_dict, pre_pose_feats=None):
         """Predict poses and calculate loss.
 
         Since there could be several parts that are the same in one shape, we
             need to do Hungarian matching to find the min loss values.
 
+        Args:
+            data_dict: the data loaded from dataloader
+            pre_pose_feats: because the stochasticity is only in the final pose
+                regressor, we can reuse all the computed features before
+
         Returns a dict of loss, each is a [B] shape tensor for later selection.
         See GNN Assembly paper Sec 3.4, the MoN loss is sampling prediction
             several times and select the min one as final loss.
+            Also returns computed features before pose regressing for reusing.
         """
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         instance_label = data_dict['instance_label']
+        forward_dict = {
+            'part_pcs': part_pcs,
+            'part_valids': valids,
+            'instance_label': instance_label,
+            'pre_pose_feats': pre_pose_feats,
+        }
 
         # prediction
-        out_dict = self.forward(part_pcs, valids, instance_label)
+        out_dict = self.forward(forward_dict)
         pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
 
         # matching
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
         match_ids = data_dict['match_ids']
-        gt_trans, gt_quat = self._match_parts(part_pcs, pred_trans, pred_quat,
-                                              gt_trans, gt_quat, match_ids)
+        new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
+                                                pred_quat, gt_trans, gt_quat,
+                                                match_ids)
 
         # computing loss
-        trans_loss = trans_l2_loss(pred_trans, gt_trans, valids)
-        loss_dict = {'trans_loss': trans_loss}
+        trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
+        loss_dict = {'trans_loss': trans_loss}  # all loss are of shape [B]
         if self.rot_loss == 'l2':
-            loss_dict['rot_loss'] = rot_l2_loss(pred_quat, gt_quat, valids)
+            loss_dict['rot_loss'] = rot_l2_loss(pred_quat, new_quat, valids)
         elif self.rot_loss == 'cosine':
-            loss_dict['rot_loss'] = rot_cosine_loss(pred_quat, gt_quat, valids)
+            loss_dict['rot_loss'] = rot_cosine_loss(pred_quat, new_quat,
+                                                    valids)
         if self.use_rot_pt_l2_loss:
             loss_dict['rot_pt_l2_loss'] = rot_points_l2_loss(
-                part_pcs, pred_quat, gt_quat, valids)  # [B]
+                part_pcs, pred_quat, new_quat, valids)
         if self.use_rot_pt_cd_loss:
             loss_dict['rot_pt_cd_loss'] = rot_points_cd_loss(
-                part_pcs, pred_quat, gt_quat, valids)  # [B]
+                part_pcs, pred_quat, new_quat, valids)
         if self.use_transform_pt_cd_loss:
             loss_dict['transform_pt_cd_loss'] = shape_cd_loss(
-                part_pcs, pred_trans, gt_trans, pred_quat, gt_quat,
-                valids)  # [B]
+                part_pcs, pred_trans, new_trans, pred_quat, new_quat, valids)
 
-        return loss_dict
+        # in eval, we also want to compute part_acc and connectivity_acc
+        if not self.training:
+            loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
+                                                  new_trans, pred_quat,
+                                                  new_quat, valids)
+            if 'contact_points' in data_dict.keys():
+                loss_dict['connectivity_acc'] = calc_connectivity_acc(
+                    pred_trans, pred_quat, data_dict['contact_points'])
+
+        return loss_dict, out_dict['pre_pose_feats']
 
     def loss_function(self, data_dict):
         """Wrapper for computing MoN loss.
@@ -266,10 +305,10 @@ class PNTransformer(pl.LightningModule):
         We sample predictions for multiple times and return the min one.
         """
         loss_dict = None
+        pre_pose_feats = None
         for _ in range(self.sample_iter):
-            # TODO: can optimize speed by reusing computed features
-            # TODO: only StochasticPoseRegressor needs to be sampled
-            sample_loss = self._loss_function(data_dict)
+            sample_loss, pre_pose_feats = self._loss_function(
+                data_dict, pre_pose_feats)
 
             if loss_dict is None:
                 loss_dict = {k: [] for k in sample_loss.keys()}
@@ -280,7 +319,8 @@ class PNTransformer(pl.LightningModule):
         total_loss = 0.
         loss_dict = {k: torch.stack(v, dim=0) for k, v in loss_dict.items()}
         for k, v in loss_dict.items():
-            total_loss += v * eval(f'self.cfg.loss.{k}_w')
+            if 'loss' in k:  # we may log some other metrics in eval, e.g. acc
+                total_loss += v * eval(f'self.cfg.loss.{k}_w')  # weighting
         loss_dict['loss'] = total_loss
 
         # `total_loss` is of shape [sample_iter, B]
@@ -306,6 +346,7 @@ class PNTransformer(pl.LightningModule):
 
         def warmup_cosine_decay(epoch):
             """First linear increase then cosine decay to 0."""
+            # we need warmup to better train Transformers
             assert epoch <= total_epochs
             if epoch < warmup_epochs:
                 factor = epoch / warmup_epochs
@@ -328,8 +369,7 @@ class PNTransformer(pl.LightningModule):
     def sample_assembly(self, data_dict):
         """Sample assembly for visualization."""
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        instance_label = data_dict['instance_label']
-        out_dict = self.forward(part_pcs, valids, instance_label)
+        out_dict = self.forward(data_dict)
         pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
 

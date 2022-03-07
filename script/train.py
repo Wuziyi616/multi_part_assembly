@@ -52,7 +52,9 @@ def main(cfg):
     trainer = pl.Trainer(
         logger=logger,
         gpus=all_gpus,
-        strategy='ddp' if len(all_gpus) > 1 else None,
+        # TODO: very strange, I still cannot train DDP on Vector...
+        # strategy='ddp' if len(all_gpus) > 1 else None,
+        strategy='dp' if len(all_gpus) > 1 else None,
         max_epochs=cfg.exp.num_epochs,
         callbacks=[
             LearningRateMonitor('epoch'),
@@ -65,6 +67,7 @@ def main(cfg):
         check_val_every_n_epoch=cfg.exp.val_every,
         log_every_n_steps=50,
         profiler='simple',  # training time bottleneck analysis
+        # detect_anomaly=True,
     )
 
     # automatically detect existing checkpoints in case of preemption
@@ -103,7 +106,7 @@ if __name__ == '__main__':
         args.gpus = [
             0,
         ]
-    cfg.gpus = args.gpus
+    cfg.exp.gpus = args.gpus
     if args.weight:
         cfg.exp.weight_file = args.weight
 

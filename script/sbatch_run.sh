@@ -21,6 +21,7 @@ JOB_NAME=$2
 PY_FILE=$3
 DDP=$4
 
+SLRM_NAME="${JOB_NAME/\//"_"}"
 LOG_DIR=checkpoint/$JOB_NAME
 DATETIME=$(date "+%Y-%m-%d_%H:%M:%S")
 LOG_FILE=$LOG_DIR/${DATETIME}.log
@@ -41,7 +42,7 @@ fi
 echo "#!/bin/bash
 
 # set up SBATCH args
-#SBATCH --job-name=$JOB_NAME
+#SBATCH --job-name=$SLRM_NAME
 #SBATCH --output=$LOG_FILE
 #SBATCH --error=$LOG_FILE
 #SBATCH --open-mode=append
@@ -70,11 +71,11 @@ nvcc --version >> $LOG_FILE                          # log NVCC version
 # run python file
 $PYTHON $PY_FILE $PY_ARGS >> $LOG_FILE                # the script above, with its standard output appended log file
 
-" >> ./run-${JOB_NAME}.slrm
+" >> ./run-${SLRM_NAME}.slrm
 
 # run the created file
-sbatch run-${JOB_NAME}.slrm
+sbatch run-${SLRM_NAME}.slrm
 
 # delete it
 sleep 3
-rm -f run-${JOB_NAME}.slrm
+rm -f run-${SLRM_NAME}.slrm
