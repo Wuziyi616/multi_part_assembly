@@ -36,9 +36,9 @@ _C.loss.rot_loss_w = 1.
 _C.loss.use_rot_pt_l2_loss = False
 _C.loss.rot_pt_l2_loss_w = 1.
 _C.loss.use_rot_pt_cd_loss = False
-_C.loss.rot_pt_cd_loss_w = 1.
+_C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.use_transform_pt_cd_loss = False
-_C.loss.transform_pt_cd_loss_w = 1.
+_C.loss.transform_pt_cd_loss_w = 10.
 
 # Data related
 _C.data = CN()
