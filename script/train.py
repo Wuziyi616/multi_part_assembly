@@ -73,7 +73,7 @@ def main(cfg):
     # automatically detect existing checkpoints in case of preemption
     ckp_files = os.listdir(ckp_dir)
     ckp_files = [ckp for ckp in ckp_files if 'model-' in ckp]
-    if ckp_files:
+    if ckp_files:  # note that this will overwrite `args.weight`
         ckp_files = sorted(
             ckp_files,
             key=lambda x: os.path.getmtime(os.path.join(ckp_dir, x)))
@@ -87,16 +87,34 @@ def main(cfg):
 
     trainer.fit(model, train_loader, val_loader, ckpt_path=ckp_path)
 
-    print("Done training...")
+    print('Done training...')
+
+
+def test(cfg):
+    assert args.weight or cfg.exp.weight_file, 'Please provide weight to test'
+    weight = args.weight if args.weight else cfg.exp.weight_file
+
+    # Initialize model
+    model = PNTransformer(cfg)
+
+    # Initialize dataloaders
+    _, val_loader = build_partnet_dataloader(cfg)
+
+    trainer = pl.Trainer(gpus=[0])
+
+    trainer.test(model, val_loader, ckpt_path=weight)
+
+    print('Done testing...')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str)
-    parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--gpus', nargs='+', default=-1, type=int)
-    parser.add_argument('--fp16', action='store_true')
-    parser.add_argument('--cudnn', action='store_true')
+    parser.add_argument('--weight', type=str, default='', help='load weight')
+    parser.add_argument('--fp16', action='store_true', help='FP16 training')
+    parser.add_argument('--cudnn', action='store_true', help='cudnn benchmark')
+    parser.add_argument('--test', action='store_true', help='test model')
     args = parser.parse_args()
 
     cfg = get_cfg_defaults()
@@ -112,4 +130,8 @@ if __name__ == '__main__':
 
     cfg.freeze()
     print(cfg)
-    main(cfg)
+
+    if args.test:
+        test(cfg)
+    else:
+        main(cfg)

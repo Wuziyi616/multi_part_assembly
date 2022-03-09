@@ -81,10 +81,10 @@ class PartNetPartDataset(Dataset):
             'instance_label': MAX_NUM x MAX_NUM
                 One-hot label to differentiate geometrically equivalent parts.
                 If `part_ids` is [0, 4, 4, 4, 1, 2, 3], `instance_label` will be
-                    [[0, 0, 0, 0, 0, 0, 0],
-                     [1, 0, 0, 0, 0, 0, 0],
-                     [0, 1, 0, 0, 0, 0, 0],
-                     [0, 0, 1, 0, 0, 0, 0],
+                    [[1, 0, 0, 0, 0, 0, 0],
+                     [1, 0, 0, 0, 0, 0, 0],  # the first instance of `4`
+                     [0, 1, 0, 0, 0, 0, 0],  # the second instance of `4`
+                     [0, 0, 1, 0, 0, 0, 0],  # the third instance of `4`
                      [1, 0, 0, 0, 0, 0, 0],
                      [1, 0, 0, 0, 0, 0, 0],
                      [1, 0, 0, 0, 0, 0, 0]].
@@ -137,14 +137,12 @@ class PartNetPartDataset(Dataset):
                 instance_label = np.zeros(
                     (self.max_num_part, self.max_num_part), dtype=np.float32)
                 cur_part_ids = cur_data['geo_part_ids']  # p
-                num_class = [0 for _ in range(60)]
+                num_per_class = [0 for _ in range(max(cur_part_ids) + 1)]
                 for j in range(num_parts):
                     cur_class = int(cur_part_ids[j])
-                    if cur_class == 0:
-                        continue
-                    cur_instance = int(num_class[cur_class])
+                    cur_instance = int(num_per_class[cur_class])
                     instance_label[j, cur_instance] = 1
-                    num_class[int(cur_part_ids[j])] += 1
+                    num_per_class[int(cur_part_ids[j])] += 1
                 data_dict['instance_label'] = instance_label
 
             elif key == 'match_ids':

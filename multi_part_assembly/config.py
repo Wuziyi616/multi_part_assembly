@@ -46,9 +46,33 @@ _C.loss.transform_pt_cd_loss_w = 1.
 _C.data = CN()
 _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
-_C.data.data_keys = ('part_ids', 'instance_label', 'match_ids', 'contact_points')
+_C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
+                     'contact_points')
 _C.data.num_pc_points = 1000
 _C.data.max_num_part = 20
+_C.data.colors = [
+    [0, 0.8, 0],
+    [0.8, 0, 0],
+    [0, 0.8, 0],
+    [0.5, 0.5, 0],
+    [0.5, 0, 0.5],
+    [0, 0.5, 0.5],
+    [0.3, 0.6, 0],
+    [0.6, 0, 0.3],
+    [0.3, 0, 0.6],
+    [0.6, 0.3, 0],
+    [0.3, 0, 0.6],
+    [0.6, 0, 0.3],
+    [0.8, 0.2, 0.5],
+    [0.8, 0.2, 0.5],
+    [0.2, 0.8, 0.5],
+    [0.2, 0.5, 0.8],
+    [0.5, 0.2, 0.8],
+    [0.5, 0.8, 0.2],
+    [0.3, 0.3, 0.7],
+    [0.3, 0.7, 0.3],
+    [0.7, 0.3, 0.3],
+]
 
 # Optimizer related
 _C.optimizer = CN()

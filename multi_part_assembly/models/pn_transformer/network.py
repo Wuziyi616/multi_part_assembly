@@ -11,6 +11,7 @@ from multi_part_assembly.utils.chamfer import chamfer_distance
 from multi_part_assembly.utils.loss import trans_l2_loss, rot_l2_loss, \
     rot_cosine_loss, rot_points_l2_loss, rot_points_cd_loss, shape_cd_loss, \
     calc_part_acc, calc_connectivity_acc
+from multi_part_assembly.utils.utils import colorize_part_pc
 
 from .transformer import TransformerEncoder
 from .regressor import StocasticPoseRegressor
@@ -117,12 +118,39 @@ class PNTransformer(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         # avg_loss among all data
-        loss_dict = {
-            f'val/{k}':
-            torch.stack([output[k] for output in outputs]).mean().item()
+        # we need to consider different batch_size
+        batch_sizes = torch.tensor([
+            output.pop('batch_size') for output in outputs
+        ]).type_as(outputs[0]['loss'])  # [num_batches]
+        losses = {
+            f'val/{k}': torch.stack([output[k] for output in outputs])
             for k in outputs[0].keys()
+        }  # each is [num_batches], stacked avg loss in each batch
+        avg_loss = {
+            k: (v * batch_sizes).sum() / batch_sizes.sum()
+            for k, v in losses.items()
         }
-        self.log_dict(loss_dict, sync_dist=True)
+        self.log_dict(avg_loss, sync_dist=True)
+
+    def test_step(self, data_dict, batch_idx):
+        loss_dict = self.forward_pass(data_dict, mode='test')
+        return loss_dict
+
+    def test_epoch_end(self, outputs):
+        # avg_loss among all data
+        # we need to consider different batch_size
+        batch_sizes = torch.tensor([
+            output.pop('batch_size') for output in outputs
+        ]).type_as(outputs[0]['loss'])  # [num_batches]
+        losses = {
+            f'test/{k}': torch.stack([output[k] for output in outputs])
+            for k in outputs[0].keys()
+        }  # each is [num_batches], stacked avg loss in each batch
+        avg_loss = {
+            k: (v * batch_sizes).sum() / batch_sizes.sum()
+            for k, v in losses.items()
+        }
+        print('; '.join([f'{k}: {v.item():.6f}' for k, v in avg_loss.items()]))
 
     def forward_pass(self, data_dict, mode):
         """Forward pass: loss computation and logging.
@@ -332,6 +360,10 @@ class PNTransformer(pl.LightningModule):
             for k, v in loss_dict.items()
         }
 
+        # log the batch_size for avg_loss computation
+        if not self.training:
+            loss_dict['batch_size'] = B
+
         return loss_dict
 
     def configure_optimizers(self):
@@ -369,19 +401,30 @@ class PNTransformer(pl.LightningModule):
     def sample_assembly(self, data_dict):
         """Sample assembly for visualization."""
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        out_dict = self.forward(data_dict)
-        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
-        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        sample_pred_pcs = []
+        for _ in range(self.sample_iter):
+            out_dict = self.forward(data_dict)
+            pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
+            pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
+            sample_pred_pcs.append(pred_pcs)
 
-        pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
-        gt_pcs = qtransform(gt_trans, gt_quat, part_pcs)
-        B, P, N, _ = part_pcs.shape
-        pred_pcs_lst, gt_pcs_lst = [], []
-        for i in range(B):
-            valid = valids[i].bool()  # [P]
-            pred, gt = pred_pcs[i], gt_pcs[i]  # [P, N, 3]
-            pred = pred[valid].flatten(0, 1).cpu().numpy()
-            gt = gt[valid].flatten(0, 1).cpu().numpy()  # [n*N, 3]
-            pred_pcs_lst.append(pred)
-            gt_pcs_lst.append(gt)
+        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        gt_pcs = qtransform(gt_trans, gt_quat, part_pcs)  # [B, P, N, 3]
+
+        colors = np.array(self.cfg.data.colors)
+        B = part_pcs.shape[0]
+        pred_pcs_lst, gt_pcs_lst = [[] for _ in range(B)], []
+        for i in range(self.sample_iter):
+            pred_pcs = sample_pred_pcs[i]  # [B, P, N, 3]
+            for j in range(B):
+                valid = valids[j].bool()  # [P]
+                pred = pred_pcs[j][valid].cpu().numpy()  # [p, N, 3]
+                pred = colorize_part_pc(pred, colors).reshape(-1, 6)
+                pred_pcs_lst[j].append(pred)  # [p*N, 6]
+                # only append GT once
+                if i == 0:
+                    gt = gt_pcs[j][valid].cpu().numpy()
+                    gt = colorize_part_pc(gt, colors).reshape(-1, 6)
+                    gt_pcs_lst.append(gt)
+
         return gt_pcs_lst, pred_pcs_lst
