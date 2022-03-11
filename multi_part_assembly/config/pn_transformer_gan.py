@@ -5,7 +5,7 @@ _C = CN()
 
 # Experiment related
 _C.exp = CN()
-_C.exp.name = ''
+_C.exp.name = 'pn_transformer_gan'
 _C.exp.ckp_dir = 'checkpoint/'
 _C.exp.weight_file = ''
 _C.exp.gpus = [
@@ -26,21 +26,27 @@ _C.model.transformer_heads = 4
 _C.model.transformer_layers = 1
 _C.model.transformer_pre_ln = True
 _C.model.noise_dim = 32  # stochastic PoseRegressor
+_C.model.discriminator = 'pointnet'  # encoder used in the shape discriminator
+_C.model.discriminator_num_points = 1024
+_C.model.discriminator_loss = 'mse'  # 'ce'
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and
 # CD of transformed whole shapes
 _C.loss = CN()
 _C.loss.sample_iter = 5  # MoN loss sampling
+# the best loss settings for baseline after some ablation
+#   - translation l2 with weight = 1
+#   - rotated part points chamfer with weight = 10
+#   - transformed whole shape points chamfer with weight = 10
+#   - not using direct loss on rotation angle, l2 loss on rotated points
+#       because there is no clear point correspondence here given the symmetry
+#       of parts, and many parts are extremely similar to each other
 _C.loss.trans_loss_w = 1.
-_C.loss.rot_loss = ''  # 'cosine', 'l2'
-_C.loss.rot_loss_w = 1.
-_C.loss.use_rot_pt_l2_loss = False
-_C.loss.rot_pt_l2_loss_w = 1.
-_C.loss.use_rot_pt_cd_loss = True
 _C.loss.rot_pt_cd_loss_w = 10.
-_C.loss.use_transform_pt_cd_loss = True
-_C.loss.transform_pt_cd_loss_w = 1.
+_C.loss.transform_pt_cd_loss_w = 10.
+_C.loss.g_loss_w = 1.
+_C.loss.d_loss_w = 1.
 
 # Data related
 _C.data = CN()
@@ -48,38 +54,39 @@ _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
 _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
                      'contact_points')
-_C.data.num_pc_points = 1000
+_C.data.num_pc_points = 1000  # points per part
 _C.data.max_num_part = 20
+_C.data.overfit = -1
+_C.data.pad_points = 0.
 _C.data.colors = [
-    [0, 0.8, 0],
-    [0.8, 0, 0],
-    [0, 0.8, 0],
-    [0.5, 0.5, 0],
-    [0.5, 0, 0.5],
-    [0, 0.5, 0.5],
-    [0.3, 0.6, 0],
-    [0.6, 0, 0.3],
-    [0.3, 0, 0.6],
-    [0.6, 0.3, 0],
-    [0.3, 0, 0.6],
-    [0.6, 0, 0.3],
-    [0.8, 0.2, 0.5],
-    [0.8, 0.2, 0.5],
-    [0.2, 0.8, 0.5],
-    [0.2, 0.5, 0.8],
-    [0.5, 0.2, 0.8],
-    [0.5, 0.8, 0.2],
-    [0.3, 0.3, 0.7],
-    [0.3, 0.7, 0.3],
-    [0.7, 0.3, 0.3],
+    [0, 204, 0],
+    [204, 0, 0],
+    [0, 204, 0],
+    [127, 127, 0],
+    [127, 0, 127],
+    [0, 127, 127],
+    [76, 153, 0],
+    [153, 0, 76],
+    [76, 0, 153],
+    [153, 76, 0],
+    [76, 0, 153],
+    [153, 0, 76],
+    [204, 51, 127],
+    [204, 51, 127],
+    [51, 204, 127],
+    [51, 127, 204],
+    [127, 51, 204],
+    [127, 204, 51],
+    [76, 76, 178],
+    [76, 178, 76],
+    [178, 76, 76],
 ]
 
 # Optimizer related
 _C.optimizer = CN()
-_C.optimizer.lr = 1e-3
-_C.optimizer.weight_decay = 0.
-_C.optimizer.warmup_ratio = 0.05
-_C.optimizer.clip_grad = None
+_C.optimizer.g_lr = 1e-4
+_C.optimizer.d_lr = 1e-3
+_C.optimizer.warmup_ratio = 0.
 
 
 def get_cfg_defaults():

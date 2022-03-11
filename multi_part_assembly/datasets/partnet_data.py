@@ -13,15 +13,20 @@ class PartNetPartDataset(Dataset):
         data_fn,
         data_keys,
         max_num_part=20,
+        overfit=-1,
+        pad_points=0.,
     ):
         # store parameters
         self.data_dir = data_dir  # './data'
         self.data_fn = data_fn  # 'Chair.train.npy'
         self.max_num_part = max_num_part  # ignore shapes with more parts
+        self.pad_points = pad_points
         self.level = 3  # fixed in the paper
 
         # array of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
         self.shape_ids = np.load(os.path.join(self.data_dir, data_fn))
+        if overfit > 0:
+            self.shape_ids = self.shape_ids[:overfit]
 
         # additional data to load, e.g. ('part_ids', 'instance_label')
         self.data_keys = data_keys
@@ -115,7 +120,12 @@ class PartNetPartDataset(Dataset):
         data_dict = {}
         # part point clouds
         cur_pts = cur_data['part_pcs']  # p x N x 3
-        data_dict['part_pcs'] = self._pad_data(cur_pts)
+        # TODO: pad with some large values to fix shape_cd_loss?
+        # data_dict['part_pcs'] = self._pad_data(cur_pts)
+        p, N, _ = cur_pts.shape
+        pad_pcs = np.ones((self.max_num_part, N, 3)) * self.pad_points
+        pad_pcs[:p] = cur_pts
+        data_dict['part_pcs'] = pad_pcs
         # part poses
         cur_pose = cur_data['part_poses']  # p x (3 + 4)
         cur_pose = self._pad_data(cur_pose)
@@ -193,6 +203,8 @@ def build_partnet_dataloader(cfg):
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
         max_num_part=cfg.data.max_num_part,
+        overfit=cfg.data.overfit,
+        pad_points=cfg.data.pad_points,
     )
     train_loader = DataLoader(
         dataset=train_set,
@@ -209,6 +221,8 @@ def build_partnet_dataloader(cfg):
         data_fn=cfg.data.data_fn.format('val'),
         data_keys=cfg.data.data_keys,
         max_num_part=cfg.data.max_num_part,
+        overfit=cfg.data.overfit,
+        pad_points=cfg.data.pad_points,
     )
     val_loader = DataLoader(
         dataset=val_set,

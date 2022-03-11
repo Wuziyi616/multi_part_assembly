@@ -1,0 +1,36 @@
+exp:
+    weight_file: ""
+    num_workers: 4
+    batch_size: 16
+    num_epochs: 200
+    val_every: 5
+
+model:
+    encoder: "pointnet"
+    pc_feat_dim: 512
+    transformer_feat_dim: 1024
+    transformer_heads: 4
+    transformer_layers: 1
+    noise_dim: 32
+    discriminator: "pointnet"
+    discriminator_num_points: 1024
+    discriminator_loss: "mse"
+
+loss:
+    trans_loss_w: 1.
+    rot_pt_cd_loss_w: 10.
+    transform_pt_cd_loss_w: 10.
+    g_loss_w: 1.
+    d_loss_w: 1.
+
+data:
+    data_dir: "../Generative-3D-Part-Assembly/prepare_data"
+    data_fn: "Chair.{}.npy"
+    data_keys: ('part_ids', 'instance_label', 'match_ids', 'contact_points')
+    overfit: -1
+    pad_points: 0.
+
+optimizer:
+    g_lr: 1e-4
+    d_lr: 1e-3
+    warmup_ratio: 0.05

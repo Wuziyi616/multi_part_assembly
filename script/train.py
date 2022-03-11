@@ -1,20 +1,20 @@
 import os
 import pwd
 import argparse
+import importlib
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from multi_part_assembly.config import get_cfg_defaults
 from multi_part_assembly.datasets import build_partnet_dataloader
-from multi_part_assembly.models import PNTransformer
+from multi_part_assembly.models import build_model
 from multi_part_assembly.utils import PCAssemblyLogCallback
 
 
 def main(cfg):
     # Initialize model
-    model = PNTransformer(cfg)
+    model = build_model(cfg)
 
     # Initialize dataloaders
     train_loader, val_loader = build_partnet_dataloader(cfg)
@@ -22,7 +22,7 @@ def main(cfg):
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
     exp_name = cfg.exp.name
-    cfg_name = os.path.basename(args.cfg_file)[:-4]  # remove '.yml'
+    cfg_name = os.path.basename(args.yml_file)[:-4]  # remove '.yml'
     ckp_dir = os.path.join(cfg.exp.ckp_dir, exp_name, cfg_name, 'models')
     os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)
 
@@ -42,7 +42,8 @@ def main(cfg):
     )
 
     # visualize assembly results
-    assembly_callback = PCAssemblyLogCallback(cfg, val_loader)
+    assembly_callback = PCAssemblyLogCallback(cfg.exp.val_sample_vis,
+                                              train_loader, val_loader)
 
     logger_name = f'{exp_name}-{cfg_name}-{SLURM_JOB_ID}'
     logger = WandbLogger(
@@ -95,7 +96,7 @@ def test(cfg):
     weight = args.weight if args.weight else cfg.exp.weight_file
 
     # Initialize model
-    model = PNTransformer(cfg)
+    model = build_model(cfg)
 
     # Initialize dataloaders
     _, val_loader = build_partnet_dataloader(cfg)
@@ -109,7 +110,8 @@ def test(cfg):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
-    parser.add_argument('--cfg_file', required=True, type=str)
+    parser.add_argument('--cfg_file', required=True, type=str, help='.py')
+    parser.add_argument('--yml_file', required=True, type=str, help='.yml')
     parser.add_argument('--gpus', nargs='+', default=-1, type=int)
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--fp16', action='store_true', help='FP16 training')
@@ -117,8 +119,9 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_true', help='test model')
     args = parser.parse_args()
 
-    cfg = get_cfg_defaults()
-    cfg.merge_from_file(args.cfg_file)
+    cfg = importlib.import_module(args.cfg_file)
+    cfg = cfg.get_cfg_defaults()
+    cfg.merge_from_file(args.yml_file)
 
     if args.gpus == -1:
         args.gpus = [
