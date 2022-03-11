@@ -47,6 +47,7 @@ _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
 _C.loss.g_loss_w = 1.
 _C.loss.d_loss_w = 1.
+_C.loss.use_rep_loss = False
 
 # Data related
 _C.data = CN()
@@ -87,6 +88,7 @@ _C.optimizer = CN()
 _C.optimizer.g_lr = 1e-4
 _C.optimizer.d_lr = 1e-3
 _C.optimizer.warmup_ratio = 0.
+_C.optimizer.clip_grad = None
 
 
 def get_cfg_defaults():

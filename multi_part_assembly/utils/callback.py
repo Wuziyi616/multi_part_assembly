@@ -40,5 +40,6 @@ class PCAssemblyLogCallback(Callback):
 
         if trainer.logger:
             pl_module.eval()
-            self._sample_assembly(trainer, pl_module, self.train_loader)
-            self._sample_assembly(trainer, pl_module, self.val_loader)
+            self._sample_assembly(trainer, pl_module, self.train_loader,
+                                  'train')
+            self._sample_assembly(trainer, pl_module, self.val_loader, 'val')

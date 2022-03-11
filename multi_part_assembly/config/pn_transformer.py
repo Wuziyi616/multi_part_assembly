@@ -42,6 +42,10 @@ _C.loss.sample_iter = 5  # MoN loss sampling
 _C.loss.trans_loss_w = 1.
 _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
+# repulsion loss
+_C.loss.use_rep_loss = False
+_C.loss.rep_loss_thre = 1e-2
+_C.loss.rep_loss_w = 10.
 
 # Data related
 _C.data = CN()

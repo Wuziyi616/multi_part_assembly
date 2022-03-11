@@ -1,4 +1,5 @@
 import os
+import sys
 import pwd
 import argparse
 import importlib
@@ -119,7 +120,8 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_true', help='test model')
     args = parser.parse_args()
 
-    cfg = importlib.import_module(args.cfg_file)
+    sys.path.append(os.path.dirname(args.cfg_file))
+    cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 

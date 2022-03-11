@@ -9,7 +9,7 @@ from multi_part_assembly.models.encoder import build_encoder
 from multi_part_assembly.utils.transforms import qtransform
 from multi_part_assembly.utils.chamfer import chamfer_distance
 from multi_part_assembly.utils.loss import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, calc_part_acc, calc_connectivity_acc
+    shape_cd_loss, repulsion_cd_loss, calc_part_acc, calc_connectivity_acc
 from multi_part_assembly.utils.utils import colorize_part_pc
 from multi_part_assembly.utils.lr import CosineAnnealingWarmupRestarts
 
@@ -104,7 +104,7 @@ class PNTransformer(pl.LightningModule):
         }
         return pred_dict
 
-    def training_step(self, data_dict, batch_idx, optimizer_idx):
+    def training_step(self, data_dict, batch_idx, optimizer_idx=-1):
         loss_dict = self.forward_pass(
             data_dict, mode='train', optimizer_idx=optimizer_idx)
         return loss_dict['loss']
@@ -315,6 +315,11 @@ class PNTransformer(pl.LightningModule):
             'rot_pt_cd_loss': rot_pt_cd_loss,
             'transform_pt_cd_loss': transform_pt_cd_loss,
         }  # all loss are of shape [B]
+
+        if self.cfg.loss.use_rep_loss:
+            rep_loss = repulsion_cd_loss(pred_trans_pts, valids,
+                                         self.cfg.loss.rep_loss_thre)
+            loss_dict['rep_loss'] = rep_loss
 
         # in eval, we also want to compute part_acc and connectivity_acc
         if not self.training:

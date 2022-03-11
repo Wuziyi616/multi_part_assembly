@@ -123,7 +123,8 @@ class PartNetPartDataset(Dataset):
         # TODO: pad with some large values to fix shape_cd_loss?
         # data_dict['part_pcs'] = self._pad_data(cur_pts)
         p, N, _ = cur_pts.shape
-        pad_pcs = np.ones((self.max_num_part, N, 3)) * self.pad_points
+        pad_pcs = np.ones(
+            (self.max_num_part, N, 3), dtype=np.float32) * self.pad_points
         pad_pcs[:p] = cur_pts
         data_dict['part_pcs'] = pad_pcs
         # part poses

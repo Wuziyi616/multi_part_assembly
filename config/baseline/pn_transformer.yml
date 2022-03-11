@@ -17,6 +17,9 @@ loss:
     trans_loss_w: 1.
     rot_pt_cd_loss_w: 10.
     transform_pt_cd_loss_w: 10.
+    use_rep_loss: False
+    rep_loss_thre: 0.01
+    rep_loss_w: 10.
 
 data:
     data_dir: "../Generative-3D-Part-Assembly/prepare_data"

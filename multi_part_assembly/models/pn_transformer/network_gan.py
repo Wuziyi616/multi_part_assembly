@@ -61,6 +61,8 @@ class PNTransformerGAN(PNTransformer):
         """
         B, P, N, _ = part_pcs.shape
         part_pcs = part_pcs.flatten(1, 2)  # [B, P*N, 3]
+        # in case `valids` == [1., 1., ..., 1.] (all_ones)
+        valids = torch.cat([valids, torch.zeros(B, 1).type_as(valids)], dim=1)
         num_valid_parts = valids.argmin(1)  # find the first `0` in `valids`
         all_idx = torch.stack([
             torch.randperm(num_valid_parts[i] * N)[:sample_num]
