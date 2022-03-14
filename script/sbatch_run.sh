@@ -6,7 +6,7 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=6 QOS=normal ./sbatch_run.sh rtx6000 test-sbatch test.py ddp --params params.py
+#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=6 QOS=normal ./script/sbatch_run.sh rtx6000 train-sbatch ./script/train.py --params params.py
 #######################################################################
 
 # read args from command line
@@ -15,11 +15,10 @@ CPUS_PER_TASK=${CPUS_PER_TASK:-5}
 MEM_PER_CPU=${MEM_PER_CPU:-8}
 QOS=${QOS:-normal}
 
-PY_ARGS=${@:5}
+PY_ARGS=${@:4}
 PARTITION=$1
 JOB_NAME=$2
 PY_FILE=$3
-DDP=$4
 
 SLRM_NAME="${JOB_NAME/\//"_"}"
 LOG_DIR=checkpoint/$JOB_NAME
@@ -28,15 +27,6 @@ LOG_FILE=$LOG_DIR/${DATETIME}.log
 
 # set up log output folder
 mkdir -p $LOG_DIR
-
-# python runner for DDP
-if [[ $DDP == "ddp" ]];
-then
-  PORT=$((29501 + $RANDOM % 100))  # randomly select a port
-  PYTHON="python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT"
-else
-  PYTHON="python"
-fi
 
 # write to new file
 echo "#!/bin/bash
@@ -69,7 +59,7 @@ gcc --version >> $LOG_FILE                           # log GCC version
 nvcc --version >> $LOG_FILE                          # log NVCC version
 
 # run python file
-$PYTHON $PY_FILE $PY_ARGS >> $LOG_FILE                # the script above, with its standard output appended log file
+python $PY_FILE $PY_ARGS >> $LOG_FILE                # the script above, with its standard output appended log file
 
 " >> ./run-${SLRM_NAME}.slrm
 

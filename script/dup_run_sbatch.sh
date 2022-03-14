@@ -5,8 +5,8 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=6 QOS=normal REPEAT=5 ./dup_run_sbatch.sh \
-#       rtx6000 test-sbatch test.py ddp params.py --fp16
+#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=6 QOS=normal REPEAT=5 ./script/dup_run_sbatch.sh \
+#       rtx6000 test-sbatch test.py ddp config.py config.yml --fp16 --cudnn
 #######################################################################
 
 # read args from command line
@@ -20,14 +20,14 @@ PY_ARGS=${@:6}
 PARTITION=$1
 JOB_NAME=$2
 PY_FILE=$3
-DDP=$4
-PARAMS=$5
+CFG=$4
+YML=$5
 
 for repeat_idx in $(seq 1 $REPEAT)
 do
-    params="dup${repeat_idx}-${PARAMS}"
-    cp $PARAMS $params
+    yml="${YML:0:(-4)}-dup${repeat_idx}.yml"
+    cp $YML $yml
     job_name="dup${repeat_idx}-${JOB_NAME}"
-    echo "./sbatch_run.sh $PARTITION $job_name $PY_FILE $DDP --params $params $PY_ARGS"
-    ./sbatch_run.sh $PARTITION $job_name $PY_FILE $DDP --params $params $PY_ARGS
+    echo "./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG --yml_file $yml $PY_ARGS"
+    ./sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG --yml_file $yml $PY_ARGS
 done

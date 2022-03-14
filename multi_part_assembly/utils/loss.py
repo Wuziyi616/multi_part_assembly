@@ -179,7 +179,8 @@ def repulsion_cd_loss(part_pcs, valids, thre):
     dist1, dist2 = chamfer_distance(pts1, pts2)  # [B*P*P, N]
     cd = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)  # [B*P*P]
     cd = torch.clamp_min(thre - cd.view(B, P, P), min=0.)  # [B, P, P]
-    valid_mask = torch.ones(B, P, P) * valids[:, :, None] * valids[:, None, :]
+    valid_mask = torch.ones(B, P, P).type_as(valids) * \
+        valids[:, :, None] * valids[:, None, :]
     loss_per_data = (cd * valid_mask).sum([1, 2]) / valid_mask.sum([1, 2])
     return loss_per_data
 

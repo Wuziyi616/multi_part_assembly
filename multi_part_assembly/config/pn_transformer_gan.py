@@ -14,7 +14,7 @@ _C.exp.gpus = [
 _C.exp.num_workers = 4
 _C.exp.batch_size = 16
 _C.exp.num_epochs = 200
-_C.exp.val_every = 5  # evaluate model every n training epochs
+_C.exp.val_every = 20  # evaluate model every n training epochs
 _C.exp.val_sample_vis = 5  # sample visualizations
 
 # Model related

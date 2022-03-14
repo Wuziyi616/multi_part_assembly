@@ -1,4 +1,8 @@
-"""Transformation functions. Adopted from https://github.com/hyperplane-lab/Generative-3D-Part-Assembly."""
+"""
+Transformation functions. Adopted from:
+- https://github.com/hyperplane-lab/Generative-3D-Part-Assembly
+- https://github.com/facebookresearch/pytorch3d/blob/main/pytorch3d/transforms
+"""
 
 # Copyright (c) 2018-present, Facebook, Inc.
 # All rights reserved.
@@ -8,11 +12,71 @@
 #
 
 import copy
+from functools import reduce
 
 import torch
 import numpy as np
 
+# Util functions
+
+
+def _copysign(a, b):
+    """
+    Return a tensor where each element has the absolute value taken from the,
+    corresponding element of a, with sign taken from the corresponding
+    element of b. This is like the standard copysign floating-point operation,
+    but is not careful about negative 0 and NaN.
+
+    Args:
+        a: source tensor.
+        b: tensor whose signs will be used, of the same shape as a.
+
+    Returns:
+        Tensor of the same shape as a with the signs of b.
+    """
+    signs_differ = (a < 0) != (b < 0)
+    return torch.where(signs_differ, -a, a)
+
+
 # PyTorch-backed implementations
+
+
+def quaternion_invert(quaternion):
+    """
+    Given a quaternion representing rotation, get the quaternion representing
+    its inverse.
+
+    Args:
+        quaternion: Quaternions as tensor of shape (..., 4), with real part
+            first, which must be versors (unit quaternions).
+
+    Returns:
+        The inverse, a tensor of quaternions of shape (..., 4).
+    """
+    scaling = torch.tensor([1, -1, -1, -1]).type_as(quaternion)
+    return quaternion * scaling
+
+
+def random_quaternions(shape):
+    """
+    Generate random quaternions representing rotations,
+    i.e. versors with nonnegative real part.
+
+    Args:
+        shape: [N1, N2, ...]
+
+    Returns:
+        Quaternions as tensor of shape (N1, N2, ..., 4).
+    """
+    if isinstance(shape, int):
+        shape = [shape]
+    else:
+        shape = list(shape)
+    n = reduce(lambda x, y: x * y, shape)
+    o = torch.randn((n, 4))
+    s = (o * o).sum(1)
+    o = o / _copysign(torch.sqrt(s), o[:, 0])[:, None]
+    return o.view(shape + [4])
 
 
 def qmul(q, r):
@@ -139,13 +203,21 @@ def qtransform(t, q, v):
     return tqv
 
 
+def qtransform_invert(t, q, tqv):
+    """Reverse transformation of (t, q)"""
+    assert t.shape[-1] == 3
+    if len(t.shape) == len(tqv.shape) - 1:
+        t = t.unsqueeze(-2).repeat_interleave(tqv.shape[-2], dim=-2)
+    assert t.shape == tqv.shape
+    qv = tqv - t
+
+    q_inv = quaternion_invert(q)
+    v = qrot(q_inv, qv)
+
+    return v
+
+
 # Numpy-backed implementations
-
-
-def qmul_np(q, r):
-    q = torch.from_numpy(q).contiguous()
-    r = torch.from_numpy(r).contiguous()
-    return qmul(q, r).numpy()
 
 
 def qrot_np(q, v):
@@ -154,59 +226,11 @@ def qrot_np(q, v):
     return qrot(q, v).numpy()
 
 
-def qeuler_np(q, order, epsilon=0, use_gpu=False):
-    if use_gpu:
-        q = torch.from_numpy(q).cuda()
-        return qeuler(q, order, epsilon).cpu().numpy()
-    else:
-        q = torch.from_numpy(q).contiguous()
-        return qeuler(q, order, epsilon).numpy()
-
-
 def qtransform_np(t, q, v):
     t = torch.from_numpy(t).contiguous()
     q = torch.from_numpy(q).contiguous()
     v = torch.from_numpy(v).contiguous()
     return qtransform(t, q, v).numpy()
-
-
-def qfix(q):
-    """
-    Enforce quaternion continuity across the time dimension by selecting
-    the representation (q or -q) with minimal distance (or, equivalently, maximal dot product)
-    between two consecutive frames.
-
-    Expects a tensor of shape (L, J, 4), where L is the sequence length and J is the number of joints.
-    Returns a tensor of the same shape.
-    """
-    assert len(q.shape) == 3
-    assert q.shape[-1] == 4
-
-    result = q.copy()
-    dot_products = np.sum(q[1:] * q[:-1], axis=2)
-    mask = dot_products < 0
-    mask = (np.cumsum(mask, axis=0) % 2).astype(bool)
-    result[1:][mask] *= -1
-    return result
-
-
-def expmap_to_quaternion(e):
-    """
-    Convert axis-angle rotations (aka exponential maps) to quaternions.
-    Stable formula from "Practical Parameterization of Rotations Using the Exponential Map".
-    Expects a tensor of shape (*, 3), where * denotes any number of dimensions.
-    Returns a tensor of shape (*, 4).
-    """
-    assert e.shape[-1] == 3
-
-    original_shape = list(e.shape)
-    original_shape[-1] = 4
-    e = e.reshape(-1, 3)
-
-    theta = np.linalg.norm(e, axis=1).reshape(-1, 1)
-    w = np.cos(0.5 * theta).reshape(-1, 1)
-    xyz = 0.5 * np.sinc(0.5 * theta / np.pi) * e
-    return np.concatenate((w, xyz), axis=1).reshape(original_shape)
 
 
 def euler_to_quaternion(e, order):

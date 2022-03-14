@@ -91,10 +91,10 @@ class PNTransformer(pl.LightningModule):
             pc_feats = torch.zeros(B, P, self.pc_feat_dim).type_as(valid_feats)
             pc_feats[valid_mask] = valid_feats
             # transformer feature fusion
-            pc_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
+            corr_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
             # MLP predict poses
-            inst_label = inst_label.type_as(pc_feats)
-            feats = torch.cat([pc_feats, inst_label], dim=-1)  # [B, P, C']
+            inst_label = inst_label.type_as(corr_feats)
+            feats = torch.cat([corr_feats, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {
