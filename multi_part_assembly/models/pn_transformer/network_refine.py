@@ -69,7 +69,7 @@ class PNTransformerRefine(PNTransformer):
             feat_dim=self.pc_feat_dim + self.max_num_part + 7,
             noise_dim=self.cfg.model.noise_dim,
         )
-        pose_predictors = _get_clones(pose_predictor)
+        pose_predictors = _get_clones(pose_predictor, self.refine_steps)
         return pose_predictors
 
     def forward(self, data_dict):
@@ -84,9 +84,9 @@ class PNTransformerRefine(PNTransformer):
                 - pc_feats: [B, P, C] (reused) or None
         """
         pc_feats = data_dict.get('pc_feats', None)
+        part_valids = data_dict['part_valids']
         if pc_feats is None:
             part_pcs = data_dict['part_pcs']
-            part_valids = data_dict['part_valids']
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
 
         part_feats = pc_feats

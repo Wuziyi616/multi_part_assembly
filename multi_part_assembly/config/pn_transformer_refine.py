@@ -5,7 +5,7 @@ _C = CN()
 
 # Experiment related
 _C.exp = CN()
-_C.exp.name = 'pn_transformer'
+_C.exp.name = 'pn_transformer_refine'
 _C.exp.ckp_dir = 'checkpoint/'
 _C.exp.weight_file = ''
 _C.exp.gpus = [

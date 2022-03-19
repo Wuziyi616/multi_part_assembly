@@ -106,7 +106,6 @@ class PNTransformer(pl.LightningModule):
         pred_dict = {
             'quat': quat,  # [B, P, 4]
             'trans': trans,  # [B, P, 3]
-            'pc_feats': pc_feats,  # [B, P, C]
             'pre_pose_feats': feats,  # [B, P, C']
         }
         return pred_dict
