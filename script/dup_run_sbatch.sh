@@ -27,7 +27,7 @@ for repeat_idx in $(seq 1 $REPEAT)
 do
     yml="${YML:0:(-4)}-dup${repeat_idx}.yml"
     cp $YML $yml
-    job_name="dup${repeat_idx}-${JOB_NAME}"
+    job_name="${JOB_NAME}-dup${repeat_idx}"
     echo "./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG --yml_file $yml $PY_ARGS"
-    ./sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG --yml_file $yml $PY_ARGS
+    ./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG --yml_file $yml $PY_ARGS
 done

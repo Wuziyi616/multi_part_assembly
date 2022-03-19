@@ -66,6 +66,17 @@ class PNTransformer(pl.LightningModule):
         )
         return pose_predictor
 
+    def _extract_part_feats(self, part_pcs, part_valids):
+        """Extract per-part point cloud features."""
+        B, P, N, _ = part_pcs.shape  # [B, P, N, 3]
+        valid_mask = (part_valids == 1)
+        # shared-weight encoder
+        valid_pcs = part_pcs[valid_mask]  # [n, N, 3]
+        valid_feats = self.encoder(valid_pcs)  # [n, C]
+        pc_feats = torch.zeros(B, P, self.pc_feat_dim).type_as(valid_feats)
+        pc_feats[valid_mask] = valid_feats
+        return pc_feats
+
     def forward(self, data_dict):
         """Forward pass to predict poses for each part.
 
@@ -83,14 +94,9 @@ class PNTransformer(pl.LightningModule):
             part_pcs = data_dict['part_pcs']
             part_valids = data_dict['part_valids']
             inst_label = data_dict['instance_label']
-            B, P, N, _ = part_pcs.shape
-            valid_mask = (part_valids == 1)
-            # shared-weight encoder
-            valid_pcs = part_pcs[valid_mask]  # [n, N, 3]
-            valid_feats = self.encoder(valid_pcs)  # [n, C]
-            pc_feats = torch.zeros(B, P, self.pc_feat_dim).type_as(valid_feats)
-            pc_feats[valid_mask] = valid_feats
+            pc_feats = self._extract_part_feats(part_pcs, part_valids)
             # transformer feature fusion
+            valid_mask = (part_valids == 1)
             corr_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
             # MLP predict poses
             inst_label = inst_label.type_as(corr_feats)
@@ -100,6 +106,7 @@ class PNTransformer(pl.LightningModule):
         pred_dict = {
             'quat': quat,  # [B, P, 4]
             'trans': trans,  # [B, P, 3]
+            'pc_feats': pc_feats,  # [B, P, C]
             'pre_pose_feats': feats,  # [B, P, C']
         }
         return pred_dict
@@ -261,36 +268,12 @@ class PNTransformer(pl.LightningModule):
 
         return new_gt_trans, new_gt_quat
 
-    def _loss_function(self, data_dict, pre_pose_feats=None, optimizer_idx=-1):
-        """Predict poses and calculate loss.
-
-        Since there could be several parts that are the same in one shape, we
-            need to do Hungarian matching to find the min loss values.
-
-        Args:
-            data_dict: the data loaded from dataloader
-            pre_pose_feats: because the stochasticity is only in the final pose
-                regressor, we can reuse all the computed features before
-
-        Returns a dict of loss, each is a [B] shape tensor for later selection.
-        See GNN Assembly paper Sec 3.4, the MoN loss is sampling prediction
-            several times and select the min one as final loss.
-            Also returns computed features before pose regressing for reusing.
-        """
-        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        instance_label = data_dict['instance_label']
-        forward_dict = {
-            'part_pcs': part_pcs,
-            'part_valids': valids,
-            'instance_label': instance_label,
-            'pre_pose_feats': pre_pose_feats,
-        }
-
-        # prediction
-        out_dict = self.forward(forward_dict)
+    def _calc_loss(self, out_dict, data_dict):
+        """Calculate loss by matching GT to prediction."""
         pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
 
         # matching GT with predictions for lowest loss
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
         match_ids = data_dict['match_ids']
         new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
@@ -334,10 +317,44 @@ class PNTransformer(pl.LightningModule):
         out_dict = {
             'pred_trans': pred_trans,  # [B, P, 3]
             'pred_quat': pred_quat,  # [B, P, 4]
-            'pre_pose_feats': pre_pose_feats,  # [B, P, C']
             'gt_trans_pts': gt_trans_pts,  # [B, P, N, 3]
             'pred_trans_pts': pred_trans_pts,  # [B, P, N, 3]
         }
+
+        return loss_dict, out_dict
+
+    def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):
+        """Predict poses and calculate loss.
+
+        Since there could be several parts that are the same in one shape, we
+            need to do Hungarian matching to find the min loss values.
+
+        Args:
+            data_dict: the data loaded from dataloader
+            pre_pose_feats: because the stochasticity is only in the final pose
+                regressor, we can reuse all the computed features before
+
+        Returns a dict of loss, each is a [B] shape tensor for later selection.
+        See GNN Assembly paper Sec 3.4, the MoN loss is sampling prediction
+            several times and select the min one as final loss.
+            Also returns computed features before pose regressing for reusing.
+        """
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
+        instance_label = data_dict['instance_label']
+        forward_dict = {
+            'part_pcs': part_pcs,
+            'part_valids': valids,
+            'instance_label': instance_label,
+            'pre_pose_feats': out_dict.get('pre_pose_feats', None),
+        }
+
+        # prediction
+        out_dict = self.forward(forward_dict)
+        pre_pose_feats = out_dict['pre_pose_feats']
+
+        # loss computation
+        loss_dict, out_dict = self._calc_loss(out_dict, data_dict)
+        out_dict['pre_pose_feats'] = pre_pose_feats
 
         return loss_dict, out_dict
 
@@ -347,11 +364,10 @@ class PNTransformer(pl.LightningModule):
         We sample predictions for multiple times and return the min one.
         """
         loss_dict = None
-        pre_pose_feats = None
+        out_dict = {}
         for _ in range(self.sample_iter):
             sample_loss, out_dict = self._loss_function(
-                data_dict, pre_pose_feats, optimizer_idx=optimizer_idx)
-            pre_pose_feats = out_dict['pre_pose_feats']
+                data_dict, out_dict, optimizer_idx=optimizer_idx)
 
             if loss_dict is None:
                 loss_dict = {k: [] for k in sample_loss.keys()}
@@ -362,7 +378,9 @@ class PNTransformer(pl.LightningModule):
         total_loss = 0.
         loss_dict = {k: torch.stack(v, dim=0) for k, v in loss_dict.items()}
         for k, v in loss_dict.items():
-            if 'loss' in k:  # we may log some other metrics in eval, e.g. acc
+            # we may log some other metrics in eval, e.g. acc
+            # exclude them from loss computation
+            if k.endswith('_loss'):
                 total_loss += v * eval(f'self.cfg.loss.{k}_w')  # weighting
         loss_dict['loss'] = total_loss
 

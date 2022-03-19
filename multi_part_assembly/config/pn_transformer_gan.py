@@ -87,7 +87,7 @@ _C.data.colors = [
 _C.optimizer = CN()
 _C.optimizer.g_lr = 1e-4
 _C.optimizer.d_lr = 1e-3
-_C.optimizer.warmup_ratio = 0.
+_C.optimizer.warmup_ratio = 0.05
 _C.optimizer.clip_grad = None
 
 

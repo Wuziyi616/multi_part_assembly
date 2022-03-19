@@ -72,19 +72,18 @@ class PNTransformerGAN(PNTransformer):
         pcs = part_pcs[batch_idx, all_idx]  # [B, num_samples, 3]
         return pcs
 
-    def _loss_function(self, data_dict, pre_pose_feats=None, optimizer_idx=-1):
+    def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):
         """Inner loop for sampling loss computation.
 
         Besides the translation and rotation loss, also compute the GAN loss.
         """
         if optimizer_idx == -1:  # in eval mode
             assert not self.training
-            return super()._loss_function(data_dict, pre_pose_feats)
+            return super()._loss_function(data_dict, out_dict)
 
         batch_size = data_dict['part_pcs'].shape[0]
         if optimizer_idx == 0:  # g step
-            loss_dict, out_dict = super()._loss_function(
-                data_dict, pre_pose_feats)
+            loss_dict, out_dict = super()._loss_function(data_dict, out_dict)
             real_pts = out_dict['pred_trans_pts']  # [B, P, N, 3]
             real_pts = self._sample_points(real_pts, data_dict['part_valids'],
                                            self.d_npoint)  # [B, n, 3]
@@ -103,7 +102,7 @@ class PNTransformerGAN(PNTransformer):
             'part_pcs': part_pcs,
             'part_valids': valids,
             'instance_label': instance_label,
-            'pre_pose_feats': pre_pose_feats,
+            'pre_pose_feats': out_dict.get('pre_pose_feats', None),
         }
         with torch.no_grad():
             out_dict = self.forward(forward_dict)
@@ -136,11 +135,10 @@ class PNTransformerGAN(PNTransformer):
             return super().loss_function(data_dict, optimizer_idx)
 
         loss_dict = None
-        pre_pose_feats = None
+        out_dict = {}
         for _ in range(self.sample_iter):
             sample_loss, out_dict = self._loss_function(
-                data_dict, pre_pose_feats, optimizer_idx=optimizer_idx)
-            pre_pose_feats = out_dict['pre_pose_feats']
+                data_dict, out_dict, optimizer_idx=optimizer_idx)
 
             if loss_dict is None:
                 loss_dict = {k: [] for k in sample_loss.keys()}

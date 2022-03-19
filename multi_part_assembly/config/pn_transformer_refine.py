@@ -19,13 +19,16 @@ _C.exp.val_sample_vis = 5  # sample visualizations
 
 # Model related
 _C.model = CN()
+_C.model.refine_steps = 3
 _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.model.pc_feat_dim = 512
+_C.model.transformer_pos_enc = (7, 64, 64)
 _C.model.transformer_feat_dim = 1024
 _C.model.transformer_heads = 4
 _C.model.transformer_layers = 1
 _C.model.transformer_pre_ln = True
 _C.model.noise_dim = 32  # stochastic PoseRegressor
+_C.model.pose_pc_feat = False  # pose regressor input part points feature
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and
