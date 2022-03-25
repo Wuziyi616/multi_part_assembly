@@ -12,18 +12,18 @@ _C.exp.gpus = [
     0,
 ]
 _C.exp.num_workers = 4
-_C.exp.batch_size = 16
-_C.exp.num_epochs = 200
-_C.exp.val_every = 20  # evaluate model every n training epochs
+_C.exp.batch_size = 32
+_C.exp.num_epochs = 400
+_C.exp.val_every = 10  # evaluate model every n training epochs
 _C.exp.val_sample_vis = 5  # sample visualizations
 
 # Model related
 _C.model = CN()
 _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
-_C.model.pc_feat_dim = 512
+_C.model.pc_feat_dim = 256
 _C.model.transformer_feat_dim = 1024
-_C.model.transformer_heads = 4
-_C.model.transformer_layers = 1
+_C.model.transformer_heads = 8
+_C.model.transformer_layers = 4
 _C.model.transformer_pre_ln = True
 _C.model.noise_dim = 32  # stochastic PoseRegressor
 _C.model.discriminator = 'pointnet'  # encoder used in the shape discriminator
@@ -47,7 +47,6 @@ _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
 _C.loss.g_loss_w = 1.
 _C.loss.d_loss_w = 1.
-_C.loss.use_rep_loss = False
 
 # Data related
 _C.data = CN()
@@ -85,7 +84,7 @@ _C.data.colors = [
 
 # Optimizer related
 _C.optimizer = CN()
-_C.optimizer.g_lr = 1e-4
+_C.optimizer.g_lr = 1e-3
 _C.optimizer.d_lr = 1e-3
 _C.optimizer.warmup_ratio = 0.05
 _C.optimizer.clip_grad = None

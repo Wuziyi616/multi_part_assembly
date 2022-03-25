@@ -3,6 +3,8 @@ import copy
 import torch
 import torch.nn as nn
 
+from multi_part_assembly.utils.transforms import qtransform
+
 from .network import PNTransformer
 from .transformer import TransformerEncoder
 from .regressor import StocasticPoseRegressor
@@ -35,25 +37,27 @@ class PNTransformerRefine(PNTransformer):
     def __init__(self, cfg):
         self.refine_steps = cfg.model.refine_steps
         self.pose_pc_feat = cfg.model.pose_pc_feat
+        self.global_feat = cfg.model.global_feat
+        self.num_global_pts = cfg.model.num_global_pts
 
         super().__init__(cfg)
 
         self.corr_pos_enc = self._init_corr_pos_enc()
+        if self.global_feat:
+            self.global_encoder = self._init_encoder()
 
     def _init_corr_pos_enc(self):
         """Positional encoding for `corr_module`."""
+        # as in DGL, we reuse the same PE for all refinement steps
         pos_enc_dims = self.cfg.model.transformer_pos_enc
         corr_pos_enc = PosEncoder(pos_enc_dims)
-        corr_pos_encs = _get_clones(corr_pos_enc, self.refine_steps)
-        return corr_pos_encs
+        return corr_pos_enc
 
     def _init_corr_module(self):
-        pos_enc_dims = self.cfg.model.transformer_pos_enc
-        dim = self.pc_feat_dim + pos_enc_dims[-1]
-        if self.pose_pc_feat:
-            dim += self.pc_feat_dim
+        """Part feature interaction module."""
+        # as in DGL, different model for each refinement step
         corr_module = TransformerEncoder(
-            d_model=dim,
+            d_model=self.pc_feat_dim,
             num_heads=self.cfg.model.transformer_heads,
             ffn_dim=self.cfg.model.transformer_feat_dim,
             num_layers=self.cfg.model.transformer_layers,
@@ -64,13 +68,39 @@ class PNTransformerRefine(PNTransformer):
         return corr_modules
 
     def _init_pose_predictor(self):
+        """Final pose estimator."""
         # concat feature, instance_label and noise as input
+        dim = self.pc_feat_dim + self.max_num_part + 7
+        if self.pose_pc_feat:
+            dim += self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=self.pc_feat_dim + self.max_num_part + 7,
+            feat_dim=dim,
             noise_dim=self.cfg.model.noise_dim,
         )
         pose_predictors = _get_clones(pose_predictor, self.refine_steps)
         return pose_predictors
+
+    @staticmethod
+    def _sample_points(part_pcs, valids, sample_num):
+        """Sample N points from valid parts to produce a shape point cloud.
+
+        Args:
+            part_pcs: [B, P, N, 3]
+            valids: [B, P], 1 is valid, 0 is padded
+            N: int
+        """
+        B, P, N, _ = part_pcs.shape
+        part_pcs = part_pcs.flatten(1, 2)  # [B, P*N, 3]
+        # in case `valids` == [1., 1., ..., 1.] (all_ones)
+        valids = torch.cat([valids, torch.zeros(B, 1).type_as(valids)], dim=1)
+        num_valid_parts = valids.argmin(1)  # find the first `0` in `valids`
+        all_idx = torch.stack([
+            torch.randperm(num_valid_parts[i] * N)[:sample_num]
+            for i in range(B)
+        ]).type_as(num_valid_parts)  # [B, num_samples]
+        batch_idx = torch.arange(B)[:, None].type_as(all_idx)
+        pcs = part_pcs[batch_idx, all_idx]  # [B, num_samples, 3]
+        return pcs
 
     def forward(self, data_dict):
         """Forward pass to predict poses for each part.
@@ -84,9 +114,8 @@ class PNTransformerRefine(PNTransformer):
                 - pc_feats: [B, P, C] (reused) or None
         """
         pc_feats = data_dict.get('pc_feats', None)
-        part_valids = data_dict['part_valids']
+        part_pcs, part_valids = data_dict['part_pcs'], data_dict['part_valids']
         if pc_feats is None:
-            part_pcs = data_dict['part_pcs']
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
 
         part_feats = pc_feats
@@ -99,11 +128,26 @@ class PNTransformerRefine(PNTransformer):
         for i in range(self.refine_steps):
             # transformer feature fusion
             # positional encoding from predicted pose
-            pos_enc = self.corr_pos_enc[i](pose)
-            in_feats = torch.cat([part_feats, pos_enc], dim=-1)
-            # transformer feature fusion
-            valid_mask = (part_valids == 1)
-            corr_feats = self.corr_module[i](in_feats, valid_mask)  # [B, P, C]
+            pos_enc = self.corr_pos_enc(pose)
+            # directly add positional encoding as in ViT
+            in_feats = part_feats + pos_enc
+            # transformer feature fusion, [B, P, C]
+            # global feature
+            if self.global_feat:
+                shape_pc = qtransform(pose[..., 4:], pose[..., :4], part_pcs)
+                shape_pc = self._sample_points(shape_pc, part_valids,
+                                               self.num_global_pts)
+                global_feat = self.global_encoder(shape_pc)
+                valids = torch.cat(
+                    [torch.ones(B, 1).type_as(part_valids), part_valids],
+                    dim=1)
+                in_feats = torch.cat([global_feat.unsqueeze(1), in_feats],
+                                     dim=1)
+                valid_mask = (valids == 1)
+                corr_feats = self.corr_module[i](in_feats, valid_mask)[:, 1:]
+            else:
+                valid_mask = (part_valids == 1)
+                corr_feats = self.corr_module[i](in_feats, valid_mask)
             # MLP predict poses
             if self.pose_pc_feat:
                 feats = torch.cat([pc_feats, corr_feats, inst_label, pose],

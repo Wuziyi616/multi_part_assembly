@@ -1,16 +1,16 @@
 exp:
     weight_file: ""
     num_workers: 4
-    batch_size: 16
-    num_epochs: 200
-    val_every: 5
+    batch_size: 32
+    num_epochs: 400
+    val_every: 10
 
 model:
     encoder: "pointnet"
-    pc_feat_dim: 512
+    pc_feat_dim: 256
     transformer_feat_dim: 1024
-    transformer_heads: 4
-    transformer_layers: 1
+    transformer_heads: 8
+    transformer_layers: 4
     noise_dim: 32
     discriminator: "pointnet"
     discriminator_num_points: 1024
@@ -31,6 +31,6 @@ data:
     pad_points: 0.
 
 optimizer:
-    g_lr: 1e-4
+    g_lr: 1e-3
     d_lr: 1e-3
     warmup_ratio: 0.05

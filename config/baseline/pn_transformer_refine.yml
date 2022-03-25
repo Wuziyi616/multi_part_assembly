@@ -1,28 +1,26 @@
 exp:
     weight_file: ""
     num_workers: 4
-    batch_size: 16
-    num_epochs: 200
+    batch_size: 32
+    num_epochs: 400
     val_every: 5
 
 model:
     refine_steps: 3
     encoder: "pointnet"
-    pc_feat_dim: 512
-    transformer_pos_enc: (7, 64, 64)
-    transformer_feat_dim: 1024
-    transformer_heads: 4
-    transformer_layers: 1
+    pc_feat_dim: 128
+    transformer_pos_enc: (7, 128, 128)
+    transformer_feat_dim: 512
+    transformer_heads: 8
+    transformer_layers: 2
     noise_dim: 32
-    pose_pc_feat: False
+    pose_pc_feat: True
+    global_feat: False
 
 loss:
     trans_loss_w: 1.
     rot_pt_cd_loss_w: 10.
     transform_pt_cd_loss_w: 10.
-    use_rep_loss: False
-    rep_loss_thre: 0.01
-    rep_loss_w: 10.
 
 data:
     data_dir: "../Generative-3D-Part-Assembly/prepare_data"

@@ -9,8 +9,8 @@ from multi_part_assembly.models.encoder import build_encoder
 from multi_part_assembly.utils.transforms import qtransform
 from multi_part_assembly.utils.chamfer import chamfer_distance
 from multi_part_assembly.utils.loss import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, repulsion_cd_loss, calc_part_acc, calc_connectivity_acc
-from multi_part_assembly.utils.utils import colorize_part_pc
+    shape_cd_loss, calc_part_acc, calc_connectivity_acc
+from multi_part_assembly.utils.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils.lr import CosineAnnealingWarmupRestarts
 
 from .transformer import TransformerEncoder
@@ -41,6 +41,7 @@ class PNTransformer(pl.LightningModule):
         self.pose_predictor = self._init_pose_predictor()
 
     def _init_encoder(self):
+        """Part point cloud encoder."""
         encoder = build_encoder(
             self.cfg.model.encoder,
             feat_dim=self.pc_feat_dim,
@@ -49,6 +50,7 @@ class PNTransformer(pl.LightningModule):
         return encoder
 
     def _init_corr_module(self):
+        """Part feature interaction module."""
         corr_module = TransformerEncoder(
             d_model=self.pc_feat_dim,
             num_heads=self.cfg.model.transformer_heads,
@@ -59,6 +61,7 @@ class PNTransformer(pl.LightningModule):
         return corr_module
 
     def _init_pose_predictor(self):
+        """Final pose estimator."""
         # concat feature, instance_label and noise as input
         pose_predictor = StocasticPoseRegressor(
             feat_dim=self.pc_feat_dim + self.max_num_part,
@@ -298,11 +301,6 @@ class PNTransformer(pl.LightningModule):
             'transform_pt_cd_loss': transform_pt_cd_loss,
         }  # all loss are of shape [B]
 
-        if self.cfg.loss.use_rep_loss:
-            rep_loss = repulsion_cd_loss(pred_trans_pts, valids,
-                                         self.cfg.loss.rep_loss_thre)
-            loss_dict['rep_loss'] = rep_loss
-
         # in eval, we also want to compute part_acc and connectivity_acc
         if not self.training:
             loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
@@ -402,7 +400,19 @@ class PNTransformer(pl.LightningModule):
         """Build optimizer and lr scheduler."""
         lr = self.cfg.optimizer.lr
         wd = self.cfg.optimizer.weight_decay
-        optimizer = optim.Adam(self.parameters(), lr=lr, weight_decay=wd)
+
+        if wd > 0.:
+            params_dict = filter_wd_parameters(self)
+            params_list = [{
+                'params': params_dict['no_decay'],
+                'weight_decay': 0.,
+            }, {
+                'params': params_dict['decay'],
+                'weight_decay': wd,
+            }]
+            optimizer = optim.AdamW(params_list, lr=lr)
+        else:
+            optimizer = optim.Adam(self.parameters(), lr=lr, weight_decay=0.)
 
         total_epochs = self.cfg.exp.num_epochs
         warmup_epochs = int(total_epochs * self.cfg.optimizer.warmup_ratio)
