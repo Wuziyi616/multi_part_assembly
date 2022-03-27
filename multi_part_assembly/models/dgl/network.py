@@ -93,6 +93,7 @@ class DGLModel(BaseModel):
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
                 - instance_label: [B, P, P]
                 - part_ids: [B, P]
+                - valid_matrix: [B, P, P]
             may contains:
                 - part_feats: [B, P, C'] (reused) or None
                 - class_list: batch of list of list (reused) or None
@@ -121,22 +122,27 @@ class DGLModel(BaseModel):
             class_list = [[] for _ in range(B)]
             for i in range(B):
                 class_ids = part_ids[i][part_valids[i] == 1].cpu().numpy()
-                for lbl in range(np.unique(class_ids)):
+                for lbl in np.unique(class_ids):
                     class_list[i].append(np.where(class_ids == lbl)[0])
 
         all_pred_quat, all_pred_trans = [], []
         for iter_ind in range(self.iter):
             # adjust relations
             if iter_ind >= 1:
-                pose_feat = self.pose_extractor(pred_pose)  # [B, P, C]
+                pose_feats = self.pose_extractor(pred_pose)  # [B, P, C]
                 # merge features of parts in the same class
                 if iter_ind % 2 == 1:
+                    pose_feat = torch.zeros_like(pose_feats).detach()
+                    part_feats_copy = torch.zeros_like(part_feats).detach()
                     for i in range(B):
                         for cls_lst in class_list[i]:
-                            pose_feat[i, cls_lst] = \
-                                pose_feat[i, cls_lst].max(dim=-2)[0]
-                            part_feats[i, cls_lst] = \
-                                part_feats[i, cls_lst].max(dim=-2)[0]
+                            pose_feat[i, cls_lst] = pose_feats[i, cls_lst].\
+                                max(dim=-2, keepdim=True)[0]
+                            part_feats_copy[i, cls_lst] = part_feats[
+                                i, cls_lst].max(
+                                    dim=-2, keepdim=True)[0]
+                else:
+                    pose_feat = pose_feats
 
                 # predict new graph relations
                 pose_feat1 = pose_feat.unsqueeze(1).repeat(1, P, 1, 1)
@@ -145,14 +151,18 @@ class DGLModel(BaseModel):
                 if iter_ind % 2 == 0:
                     new_relation = self.relation_predictor_dense(
                         input_relation.view(B, P * P, -1)).view(B, P, P)
-                elif iter_ind % 2 == 1:
+                else:
                     new_relation = self.relation_predictor(
                         input_relation.view(B, P * P, -1)).view(B, P, P)
                 relation_matrix = new_relation.double() * valid_matrix
 
             # mlp3, GNN nodes pairwise interaction
-            part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)
-            part_feat2 = part_feats.unsqueeze(1).repeat(1, P, 1, 1)
+            if iter_ind % 2 == 1:
+                part_feat1 = part_feats_copy.unsqueeze(2).repeat(1, 1, P, 1)
+                part_feat2 = part_feats_copy.unsqueeze(1).repeat(1, P, 1, 1)
+            else:
+                part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)
+                part_feat2 = part_feats.unsqueeze(1).repeat(1, P, 1, 1)
             input_3 = torch.cat([part_feat1, part_feat2], dim=-1)
             part_relation = self.mlp3s[iter_ind](input_3.view(B * P, P, -1))
             part_relation = part_relation.view(B, P, P, -1).double()
@@ -212,12 +222,12 @@ class DGLModel(BaseModel):
             Also returns computed features before pose regressing for reusing.
         """
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        inst_lbl, part_ids = data_dict['instance_label'], data_dict['part_ids']
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
-            'instance_label': inst_lbl,
-            'part_ids': part_ids,
+            'instance_label': data_dict['instance_label'],
+            'part_ids': data_dict['part_ids'],
+            'valid_matrix': data_dict['valid_matrix'],
             'part_feats': out_dict.get('part_feats', None),
             'class_list': out_dict.get('class_list', None),
         }

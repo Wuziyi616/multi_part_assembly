@@ -3,7 +3,7 @@ exp:
     num_workers: 4
     batch_size: 32
     num_epochs: 200
-    val_every: 10
+    val_every: 5
 
 model:
     encoder: "pointnet"
