@@ -3,6 +3,7 @@ from .modules import PoseRegressor, StocasticPoseRegressor, BaseModel
 from .pn_transformer import PNTransformer, PNTransformerGAN, PNTransformerRefine
 from .b_global import GlobalModel
 from .b_lstm import LSTMModel
+from .dgl import DGLModel
 
 
 def build_model(cfg):
@@ -10,6 +11,8 @@ def build_model(cfg):
         return GlobalModel(cfg)
     elif cfg.exp.name == 'lstm':
         return LSTMModel(cfg)
+    elif cfg.exp.name == 'dgl':
+        return DGLModel(cfg)
     elif cfg.exp.name == 'pn_transformer':
         return PNTransformer(cfg)
     elif cfg.exp.name == 'pn_transformer_gan':

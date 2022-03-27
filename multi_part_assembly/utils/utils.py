@@ -1,5 +1,7 @@
+import copy
 import numpy as np
 
+import torch.nn as nn
 from torch.nn import LayerNorm, GroupNorm
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.instancenorm import _InstanceNorm
@@ -82,3 +84,7 @@ def filter_wd_parameters(model, skip_list=()):
     decay_name.sort()
     decay = [model.get_parameter(name) for name in decay_name]
     return {'decay': list(decay), 'no_decay': list(no_decay)}
+
+
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])

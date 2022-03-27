@@ -73,29 +73,29 @@ class LSTMModel(BaseModel):
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
                 - instance_label: [B, P, P]
             may contains:
-                - pre_pose_feats: [B, P, C'] (reused) or None
+                - part_feats: [B, P, C'] (reused) or None
         """
-        feats = data_dict.get('pre_pose_feats', None)
+        part_feats = data_dict.get('part_feats', None)
 
-        if feats is None:
+        if part_feats is None:
             part_pcs = data_dict['part_pcs']
             part_valids = data_dict['part_valids']
-            inst_label = data_dict['instance_label']
-            pc_feats = self._extract_part_feats(part_pcs, part_valids)
-            # prepare seq2seq input
-            pc_feats_seq = pc_feats.transpose(0, 1).contiguous()  # [P, B, C]
-            target_seq = pc_feats_seq.detach()
-            output_seq, _ = self.seq2seq(pc_feats_seq, target_seq)
-            output_seq = output_seq.squeeze(2).transpose(0, 1)  # [B, P, C']
-            # MLP predict poses
-            inst_label = inst_label.type_as(pc_feats)
-            feats = torch.cat([output_seq, inst_label], dim=-1)
+            part_feats = self._extract_part_feats(part_pcs, part_valids)
+
+        # prepare seq2seq input
+        part_feats_seq = part_feats.transpose(0, 1).contiguous()  # [P, B, C]
+        target_seq = part_feats_seq.detach()
+        output_seq, _ = self.seq2seq(part_feats_seq, target_seq)
+        output_seq = output_seq.squeeze(2).transpose(0, 1)  # [B, P, C']
+        # MLP predict poses
+        inst_label = data_dict['instance_label'].tyas_as(part_feats)
+        feats = torch.cat([output_seq, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {
             'quat': quat,  # [B, P, 4]
             'trans': trans,  # [B, P, 3]
-            'pre_pose_feats': feats,  # [B, P, C']
+            'part_feats': part_feats,  # [B, P, C']
         }
         return pred_dict
 
@@ -107,8 +107,8 @@ class LSTMModel(BaseModel):
 
         Args:
             data_dict: the data loaded from dataloader
-            pre_pose_feats: because the stochasticity is only in the final pose
-                regressor, we can reuse all the computed features before
+            part_feats: Seq2seq model also has stochasticity, so we only
+                reuse part point cloud features
 
         Returns a dict of loss, each is a [B] shape tensor for later selection.
         See GNN Assembly paper Sec 3.4, the MoN loss is sampling prediction
@@ -121,15 +121,15 @@ class LSTMModel(BaseModel):
             'part_pcs': part_pcs,
             'part_valids': valids,
             'instance_label': instance_label,
-            'pre_pose_feats': out_dict.get('pre_pose_feats', None),
+            'part_feats': out_dict.get('part_feats', None),
         }
 
         # prediction
         out_dict = self.forward(forward_dict)
-        pre_pose_feats = out_dict['pre_pose_feats']
+        part_feats = out_dict['part_feats']
 
         # loss computation
         loss_dict, out_dict = self._calc_loss(out_dict, data_dict)
-        out_dict['pre_pose_feats'] = pre_pose_feats
+        out_dict['part_feats'] = part_feats
 
         return loss_dict, out_dict

@@ -177,27 +177,6 @@ class Seq2Seq(nn.Module):
         stop_signs = torch.stack(stop_signs, dim=0)
         return decoder_outputs, stop_signs
 
-    def infer_decoder_stop(self, decoder_hidden, length=None):
-        decoder_outputs = []
-        stop_signs = []
-        decoder_input = self.decoder.init_input.detach().repeat(1, 1, 1).cuda()
-        for di in range(self.max_length):
-            decoder_output, decoder_hidden, output_seq, stop_sign = \
-                self.decoder(decoder_input, decoder_hidden)
-            decoder_outputs.append(output_seq)
-            stop_signs.append(stop_sign)
-            if length is not None:
-                if di == length - 1:
-                    break
-            elif torch.sigmoid(stop_sign[0, 0]) > 0.5:
-                # stop condition
-                break
-            decoder_input = output_seq.detach().unsqueeze(
-                0)  # using target seq as input
-        decoder_outputs = torch.stack(decoder_outputs, dim=0)
-        stop_signs = torch.stack(stop_signs, dim=0)
-        return decoder_outputs, stop_signs
-
     def forward(self, input_seq, target_seq, teacher_forcing_ratio=0.5):
         """
         :param input_seq: (seq_len, batch_size, feature_dim) PackedSequence

@@ -77,13 +77,12 @@ class GlobalModel(BaseModel):
         if feats is None:
             part_pcs = data_dict['part_pcs']
             part_valids = data_dict['part_valids']
-            inst_label = data_dict['instance_label']
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
             global_feats = self._extract_global_feats(part_pcs)
             global_feats = global_feats.unsqueeze(1).repeat(
                 1, self.max_num_part, 1)  # [B, P, C]
             # MLP predict poses
-            inst_label = inst_label.type_as(pc_feats)
+            inst_label = data_dict['instance_label'].type_as(pc_feats)
             feats = torch.cat([global_feats, pc_feats, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 

@@ -1,16 +1,11 @@
-import copy
-
 import torch
 import torch.nn as nn
 
 from multi_part_assembly.models import StocasticPoseRegressor
+from multi_part_assembly.utils import _get_clones
 
 from .network import PNTransformer
 from .transformer import TransformerEncoder
-
-
-def _get_clones(module, N):
-    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
 
 class PosEncoder(nn.Module):
@@ -167,5 +162,6 @@ class PNTransformerRefine(PNTransformer):
             for k, v in loss_dict.items():
                 all_loss_dict[k] = all_loss_dict[k] + v
                 all_loss_dict[f'{k}_{i}'] = v
+        out_dict['pc_feats'] = pc_feats
 
         return all_loss_dict, out_dict

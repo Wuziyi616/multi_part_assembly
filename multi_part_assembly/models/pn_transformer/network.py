@@ -85,13 +85,12 @@ class PNTransformer(BaseModel):
         if feats is None:
             part_pcs = data_dict['part_pcs']
             part_valids = data_dict['part_valids']
-            inst_label = data_dict['instance_label']
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
             # transformer feature fusion
             valid_mask = (part_valids == 1)
             corr_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
             # MLP predict poses
-            inst_label = inst_label.type_as(corr_feats)
+            inst_label = data_dict['instance_label'].type_as(corr_feats)
             feats = torch.cat([corr_feats, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 

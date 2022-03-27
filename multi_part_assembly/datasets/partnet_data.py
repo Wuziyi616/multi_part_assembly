@@ -189,6 +189,12 @@ class PartNetPartDataset(Dataset):
                 cur_sym = cur_data['sym']  # p x 3
                 data_dict['sym'] = self._pad_data(cur_sym)
 
+            elif key == 'valid_matrix':
+                out = np.zeros((self.max_num_part, self.max_num_part),
+                               dtype=np.float32)
+                out[:num_parts, :num_parts] = 1.
+                data_dict['valid_matrix'] = out
+
             else:
                 raise ValueError(f'ERROR: unknown data {key}!')
 
