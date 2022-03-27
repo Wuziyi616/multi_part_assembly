@@ -3,11 +3,11 @@ import copy
 import torch
 import torch.nn as nn
 
-from multi_part_assembly.utils.transforms import qtransform
+from multi_part_assembly.utils import qtransform
+from multi_part_assembly.models import StocasticPoseRegressor
 
 from .network import PNTransformer
 from .transformer import TransformerEncoder
-from .regressor import StocasticPoseRegressor
 
 
 def _get_clones(module, N):

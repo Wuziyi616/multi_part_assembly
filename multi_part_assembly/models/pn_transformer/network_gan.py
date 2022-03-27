@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from multi_part_assembly.models.encoder import build_encoder
-from multi_part_assembly.utils.transforms import qtransform
-from multi_part_assembly.utils.lr import CosineAnnealingWarmupRestarts
+from multi_part_assembly.models import build_encoder
+from multi_part_assembly.utils import qtransform
+from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 from .network import PNTransformer
 
