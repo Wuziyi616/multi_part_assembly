@@ -29,8 +29,6 @@ _C.model.transformer_layers = 2
 _C.model.transformer_pre_ln = True
 _C.model.noise_dim = 32  # stochastic PoseRegressor
 _C.model.pose_pc_feat = True  # pose regressor input part points feature
-_C.model.global_feat = False  # global shape feature as Transformer input
-_C.model.num_global_pts = 1024
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and

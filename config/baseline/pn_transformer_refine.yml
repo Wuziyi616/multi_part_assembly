@@ -15,7 +15,6 @@ model:
     transformer_layers: 2
     noise_dim: 32
     pose_pc_feat: True
-    global_feat: False
 
 loss:
     trans_loss_w: 1.
