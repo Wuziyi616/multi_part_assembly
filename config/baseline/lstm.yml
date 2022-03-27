@@ -8,6 +8,7 @@ exp:
 model:
     encoder: "pointnet"
     pc_feat_dim: 128
+    lstm_hidden_size: 256
     noise_dim: 32
 
 loss:

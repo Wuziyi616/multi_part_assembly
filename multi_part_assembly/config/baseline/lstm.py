@@ -5,7 +5,7 @@ _C = CN()
 
 # Experiment related
 _C.exp = CN()
-_C.exp.name = 'global'
+_C.exp.name = 'lstm'
 _C.exp.ckp_dir = 'checkpoint/'
 _C.exp.weight_file = ''
 _C.exp.gpus = [
@@ -21,6 +21,7 @@ _C.exp.val_sample_vis = 5  # sample visualizations
 _C.model = CN()
 _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.model.pc_feat_dim = 128
+_C.model.lstm_hidden_size = 256
 _C.model.noise_dim = 32  # stochastic PoseRegressor
 
 # Loss related
