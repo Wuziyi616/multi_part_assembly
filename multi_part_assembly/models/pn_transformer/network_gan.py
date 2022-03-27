@@ -25,7 +25,7 @@ class ShapeDiscriminator(nn.Module):
 
 
 class PNTransformerGAN(PNTransformer):
-    """Baseline multi-part assembly model with discriminator.
+    """PNTransformer with discriminator.
 
     Encoder: PointNet extracting per-part global point cloud features
     Correlator: TransformerEncoder perform part interactions

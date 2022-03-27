@@ -5,7 +5,7 @@ _C = CN()
 
 # Experiment related
 _C.exp = CN()
-_C.exp.name = 'pn_transformer_refine'
+_C.exp.name = 'global'
 _C.exp.ckp_dir = 'checkpoint/'
 _C.exp.weight_file = ''
 _C.exp.gpus = [
@@ -13,22 +13,15 @@ _C.exp.gpus = [
 ]
 _C.exp.num_workers = 4
 _C.exp.batch_size = 32
-_C.exp.num_epochs = 400
-_C.exp.val_every = 5  # evaluate model every n training epochs
+_C.exp.num_epochs = 200
+_C.exp.val_every = 10  # evaluate model every n training epochs
 _C.exp.val_sample_vis = 5  # sample visualizations
 
 # Model related
 _C.model = CN()
-_C.model.refine_steps = 3
 _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
-_C.model.pc_feat_dim = 128
-_C.model.transformer_pos_enc = (7, 128, 128)
-_C.model.transformer_feat_dim = 512
-_C.model.transformer_heads = 8
-_C.model.transformer_layers = 2
-_C.model.transformer_pre_ln = True
+_C.model.pc_feat_dim = 256
 _C.model.noise_dim = 32  # stochastic PoseRegressor
-_C.model.pose_pc_feat = True  # pose regressor input part points feature
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and
@@ -77,7 +70,7 @@ _C.data.colors = [
 _C.optimizer = CN()
 _C.optimizer.lr = 1e-3
 _C.optimizer.weight_decay = 0.
-_C.optimizer.warmup_ratio = 0.05
+_C.optimizer.warmup_ratio = 0.
 _C.optimizer.clip_grad = None
 
 

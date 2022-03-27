@@ -27,8 +27,6 @@ data:
     data_dir: "../Generative-3D-Part-Assembly/prepare_data"
     data_fn: "Chair.{}.npy"
     data_keys: ('part_ids', 'instance_label', 'match_ids', 'contact_points')
-    overfit: -1
-    pad_points: 0.
 
 optimizer:
     g_lr: 1e-3

@@ -3,14 +3,11 @@ import torch
 from multi_part_assembly.models import BaseModel
 from multi_part_assembly.models import build_encoder, StocasticPoseRegressor
 
-from .transformer import TransformerEncoder
 
+class GlobalModel(BaseModel):
+    """PointNet-MLP based multi-part assembly model (`B-Global`).
 
-class PNTransformer(BaseModel):
-    """PointNet-Transformer based multi-part assembly model.
-
-    Encoder: PointNet extracting per-part global point cloud features
-    Correlator: TransformerEncoder perform part interactions
+    Encoder: PointNet extracting global & part point cloud feature
     Predictor: MLP-based pose predictor
     """
 
@@ -26,7 +23,7 @@ class PNTransformer(BaseModel):
         self.sample_iter = self.cfg.loss.sample_iter
 
         self.encoder = self._init_encoder()
-        self.corr_module = self._init_corr_module()
+        self.global_encoder = self._init_encoder()
         self.pose_predictor = self._init_pose_predictor()
 
     def _init_encoder(self):
@@ -38,22 +35,11 @@ class PNTransformer(BaseModel):
         )
         return encoder
 
-    def _init_corr_module(self):
-        """Part feature interaction module."""
-        corr_module = TransformerEncoder(
-            d_model=self.pc_feat_dim,
-            num_heads=self.cfg.model.transformer_heads,
-            ffn_dim=self.cfg.model.transformer_feat_dim,
-            num_layers=self.cfg.model.transformer_layers,
-            norm_first=self.cfg.model.transformer_pre_ln,
-        )
-        return corr_module
-
     def _init_pose_predictor(self):
         """Final pose estimator."""
-        # concat feature, instance_label and noise as input
+        # concat global & part feature, instance_label and noise as input
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=self.pc_feat_dim + self.max_num_part,
+            feat_dim=self.pc_feat_dim * 2 + self.max_num_part,
             noise_dim=self.cfg.model.noise_dim,
         )
         return pose_predictor
@@ -67,6 +53,12 @@ class PNTransformer(BaseModel):
         valid_feats = self.encoder(valid_pcs)  # [n, C]
         pc_feats = torch.zeros(B, P, self.pc_feat_dim).type_as(valid_feats)
         pc_feats[valid_mask] = valid_feats
+        return pc_feats
+
+    def _extract_global_feats(self, part_pcs):
+        """Extract global point cloud features."""
+        global_pcs = part_pcs.flatten(1, 2)  # [B, P*N, 3]
+        pc_feats = self.global_encoder(global_pcs)  # [B, C]
         return pc_feats
 
     def forward(self, data_dict):
@@ -87,12 +79,12 @@ class PNTransformer(BaseModel):
             part_valids = data_dict['part_valids']
             inst_label = data_dict['instance_label']
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
-            # transformer feature fusion
-            valid_mask = (part_valids == 1)
-            corr_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
+            global_feats = self._extract_global_feats(part_pcs)
+            global_feats = global_feats.unsqueeze(1).repeat(
+                1, self.max_num_part, 1)  # [B, P, C]
             # MLP predict poses
-            inst_label = inst_label.type_as(corr_feats)
-            feats = torch.cat([corr_feats, inst_label], dim=-1)
+            inst_label = inst_label.type_as(pc_feats)
+            feats = torch.cat([global_feats, pc_feats, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {

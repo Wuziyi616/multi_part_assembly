@@ -35,13 +35,6 @@ _C.model.discriminator_loss = 'mse'  # 'ce'
 # CD of transformed whole shapes
 _C.loss = CN()
 _C.loss.sample_iter = 5  # MoN loss sampling
-# the best loss settings for baseline after some ablation
-#   - translation l2 with weight = 1
-#   - rotated part points chamfer with weight = 10
-#   - transformed whole shape points chamfer with weight = 10
-#   - not using direct loss on rotation angle, l2 loss on rotated points
-#       because there is no clear point correspondence here given the symmetry
-#       of parts, and many parts are extremely similar to each other
 _C.loss.trans_loss_w = 1.
 _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.

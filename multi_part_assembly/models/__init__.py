@@ -1,10 +1,13 @@
 from .modules import build_encoder, PointNet, DGCNN, PointNet2SSG, PointNet2MSG
 from .modules import PoseRegressor, StocasticPoseRegressor, BaseModel
 from .pn_transformer import PNTransformer, PNTransformerGAN, PNTransformerRefine
+from .b_global import GlobalModel
 
 
 def build_model(cfg):
-    if cfg.exp.name == 'pn_transformer':
+    if cfg.exp.name == 'global':
+        return GlobalModel(cfg)
+    elif cfg.exp.name == 'pn_transformer':
         return PNTransformer(cfg)
     elif cfg.exp.name == 'pn_transformer_gan':
         return PNTransformerGAN(cfg)

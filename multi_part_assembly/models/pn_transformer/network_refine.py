@@ -31,7 +31,7 @@ class PosEncoder(nn.Module):
 
 
 class PNTransformerRefine(PNTransformer):
-    """Baseline multi-part assembly model with iterative refinement."""
+    """PNTransformer with iterative refinement."""
 
     def __init__(self, cfg):
         self.refine_steps = cfg.model.refine_steps

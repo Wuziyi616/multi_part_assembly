@@ -7,6 +7,8 @@ from scipy.optimize import linear_sum_assignment
 
 from multi_part_assembly.utils import qtransform, chamfer_distance
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
+from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
+    shape_cd_loss, calc_part_acc, calc_connectivity_acc
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -186,8 +188,57 @@ class BaseModel(pl.LightningModule):
         return new_gt_trans, new_gt_quat
 
     def _calc_loss(self, out_dict, data_dict):
-        """Calculate loss by matching GT to prediction."""
-        pass
+        """Calculate loss by matching GT to prediction.
+
+        Also compute evaluation metrics during testing.
+        """
+        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
+
+        # matching GT with predictions for lowest loss
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
+        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        match_ids = data_dict['match_ids']
+        new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
+                                                pred_quat, gt_trans, gt_quat,
+                                                match_ids)
+
+        # computing loss
+        trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
+        rot_pt_cd_loss = rot_points_cd_loss(part_pcs, pred_quat, new_quat,
+                                            valids)
+        transform_pt_cd_loss, gt_trans_pts, pred_trans_pts = \
+            shape_cd_loss(
+                part_pcs,
+                pred_trans,
+                new_trans,
+                pred_quat,
+                new_quat,
+                valids,
+                ret_pts=True)
+        loss_dict = {
+            'trans_loss': trans_loss,
+            'rot_pt_cd_loss': rot_pt_cd_loss,
+            'transform_pt_cd_loss': transform_pt_cd_loss,
+        }  # all loss are of shape [B]
+
+        # in eval, we also want to compute part_acc and connectivity_acc
+        if not self.training:
+            loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
+                                                  new_trans, pred_quat,
+                                                  new_quat, valids)
+            if 'contact_points' in data_dict.keys():
+                loss_dict['connectivity_acc'] = calc_connectivity_acc(
+                    pred_trans, pred_quat, data_dict['contact_points'])
+
+        # return some intermediate variables for reusing
+        out_dict = {
+            'pred_trans': pred_trans,  # [B, P, 3]
+            'pred_quat': pred_quat,  # [B, P, 4]
+            'gt_trans_pts': gt_trans_pts,  # [B, P, N, 3]
+            'pred_trans_pts': pred_trans_pts,  # [B, P, N, 3]
+        }
+
+        return loss_dict, out_dict
 
     def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):
         """Predict poses and calculate loss.

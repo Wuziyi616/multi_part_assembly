@@ -2,15 +2,12 @@ exp:
     weight_file: ""
     num_workers: 4
     batch_size: 32
-    num_epochs: 400
+    num_epochs: 200
     val_every: 10
 
 model:
     encoder: "pointnet"
     pc_feat_dim: 256
-    transformer_feat_dim: 1024
-    transformer_heads: 8
-    transformer_layers: 4
     noise_dim: 32
 
 loss:
@@ -21,10 +18,6 @@ loss:
 data:
     data_dir: "../Generative-3D-Part-Assembly/prepare_data"
     data_fn: "Chair.{}.npy"
-    data_keys: ('part_ids', 'instance_label', 'match_ids', 'contact_points')
 
 optimizer:
     lr: 1e-3
-    weight_decay: 0.
-    warmup_ratio: 0.05
-    clip_grad: null
