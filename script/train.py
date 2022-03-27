@@ -37,9 +37,9 @@ def main(cfg):
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckp_dir,
         filename='model-{epoch:03d}',
-        monitor='val/loss',
+        monitor='val/part_acc',
         save_top_k=5,
-        mode='min',
+        mode='max',
     )
 
     # visualize assembly results
