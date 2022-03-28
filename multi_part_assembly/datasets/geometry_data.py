@@ -24,7 +24,9 @@ class GeometryPartDataset(Dataset):
         # store parameters
         self.data_dir = data_dir
         with open(os.path.join(data_dir, data_fn), 'r') as f:
-            self.data_list = [line.strip() for line in f.readlines()]
+            self.data_list = [
+                line.strip() for line in f.readlines() if 'fractured' in line
+            ]
         if overfit > 0:
             self.data_list = self.data_list[:overfit]
 

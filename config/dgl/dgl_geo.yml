@@ -2,8 +2,8 @@ exp:
     weight_file: ""
     num_workers: 8
     batch_size: 32
-    num_epochs: 200
-    val_every: 5
+    num_epochs: 100
+    val_every: 10
 
 model:
     encoder: "pointnet"
