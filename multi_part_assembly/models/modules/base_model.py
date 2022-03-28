@@ -203,6 +203,9 @@ class BaseModel(pl.LightningModule):
             new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
                                                     pred_quat, gt_trans,
                                                     gt_quat, match_ids)
+        else:
+            new_trans = gt_trans.detach().clone()
+            new_quat = gt_quat.detach().clone()
 
         # computing loss
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)

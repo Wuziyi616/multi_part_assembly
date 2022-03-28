@@ -86,10 +86,10 @@ class GeometryPartDataset(Dataset):
             for mesh_file in mesh_files
         ]
         pcs = [
-            trimesh.sample.sample_surface(mesh, self.num_points)
+            trimesh.sample.sample_surface(mesh, self.num_points)[0]
             for mesh in meshes
         ]
-        return np.array(pcs)
+        return np.stack(pcs, axis=0)
 
     def __getitem__(self, index):
         try:
@@ -171,7 +171,7 @@ def build_geometry_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
-        num_points=cfg.data.num_points,
+        num_points=cfg.data.num_pc_points,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )
@@ -189,7 +189,7 @@ def build_geometry_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('val'),
         data_keys=cfg.data.data_keys,
-        num_points=cfg.data.num_points,
+        num_points=cfg.data.num_pc_points,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )

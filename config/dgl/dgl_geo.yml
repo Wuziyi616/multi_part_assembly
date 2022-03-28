@@ -3,12 +3,12 @@ exp:
     num_workers: 8
     batch_size: 32
     num_epochs: 200
-    val_every: 10
+    val_every: 5
 
 model:
     encoder: "pointnet"
-    pc_feat_dim: 128
-    lstm_hidden_size: 256
+    pc_feat_dim: 256
+    gnn_iter: 5
     noise_dim: 0
 
 loss:
@@ -21,7 +21,7 @@ data:
     dataset: "geometry"
     data_dir: "/scratch/ssd004/scratch/ziyiwu/data/assembly/FractureSmall"
     data_fn: "data.{}.csv"
-    data_keys: ('part_ids', 'instance_label')
+    data_keys: ('part_ids', 'instance_label', 'valid_matrix')
 
 optimizer:
     lr: 1e-3

@@ -2,13 +2,15 @@ exp:
     weight_file: ""
     num_workers: 8
     batch_size: 32
-    num_epochs: 200
+    num_epochs: 400
     val_every: 10
 
 model:
     encoder: "pointnet"
-    pc_feat_dim: 128
-    lstm_hidden_size: 256
+    pc_feat_dim: 256
+    transformer_feat_dim: 1024
+    transformer_heads: 8
+    transformer_layers: 4
     noise_dim: 0
 
 loss:
@@ -25,3 +27,6 @@ data:
 
 optimizer:
     lr: 1e-3
+    weight_decay: 0.
+    warmup_ratio: 0.05
+    clip_grad: null
