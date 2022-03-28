@@ -95,13 +95,12 @@ class PNTransformerGAN(PNTransformer):
 
         assert optimizer_idx == 1  # d step
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        instance_label = data_dict['instance_label']
 
         # generate
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
-            'instance_label': instance_label,
+            'instance_label': data_dict['instance_label'],
             'pre_pose_feats': out_dict.get('pre_pose_feats', None),
         }
         with torch.no_grad():

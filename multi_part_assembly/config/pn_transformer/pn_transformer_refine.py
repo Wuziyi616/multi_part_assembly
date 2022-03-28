@@ -41,6 +41,7 @@ _C.loss.transform_pt_cd_loss_w = 10.
 
 # Data related
 _C.data = CN()
+_C.data.dataset = 'partnet'
 _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
 _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
@@ -48,7 +49,6 @@ _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
 _C.data.num_pc_points = 1000  # points per part
 _C.data.max_num_part = 20
 _C.data.overfit = -1
-_C.data.pad_points = 0.
 _C.data.colors = [
     [0, 204, 0],
     [204, 0, 0],

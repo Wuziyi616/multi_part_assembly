@@ -17,14 +17,6 @@ class PNTransformer(BaseModel):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self.cfg = cfg
-
-        self.max_num_part = self.cfg.data.max_num_part
-        self.pc_feat_dim = self.cfg.model.pc_feat_dim
-
-        # loss configs
-        self.sample_iter = self.cfg.loss.sample_iter
-
         self.encoder = self._init_encoder()
         self.corr_module = self._init_corr_module()
         self.pose_predictor = self._init_pose_predictor()
@@ -52,8 +44,10 @@ class PNTransformer(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label and noise as input
+        feat_dim = self.pc_feat_dim + self.max_num_part \
+            if self.semantic else self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=self.pc_feat_dim + self.max_num_part,
+            feat_dim=feat_dim,
             noise_dim=self.cfg.model.noise_dim,
         )
         return pose_predictor
@@ -76,7 +70,7 @@ class PNTransformer(BaseModel):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
-                - instance_label: [B, P, P]
+                - instance_label: [B, P, P (0 in geometry assembly)]
             may contains:
                 - pre_pose_feats: [B, P, C'] (reused) or None
         """
@@ -118,11 +112,10 @@ class PNTransformer(BaseModel):
             Also returns computed features before pose regressing for reusing.
         """
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        instance_label = data_dict['instance_label']
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
-            'instance_label': instance_label,
+            'instance_label': data_dict['instance_label'],
             'pre_pose_feats': out_dict.get('pre_pose_feats', None),
         }
 

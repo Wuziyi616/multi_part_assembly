@@ -14,13 +14,11 @@ class PartNetPartDataset(Dataset):
         data_keys,
         max_num_part=20,
         overfit=-1,
-        pad_points=0.,
     ):
         # store parameters
         self.data_dir = data_dir  # './data'
         self.data_fn = data_fn  # 'Chair.train.npy'
         self.max_num_part = max_num_part  # ignore shapes with more parts
-        self.pad_points = pad_points
         self.level = 3  # fixed in the paper
 
         # array of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
@@ -120,13 +118,7 @@ class PartNetPartDataset(Dataset):
         data_dict = {}
         # part point clouds
         cur_pts = cur_data['part_pcs']  # p x N x 3
-        # TODO: pad with some large values to fix shape_cd_loss?
-        # data_dict['part_pcs'] = self._pad_data(cur_pts)
-        p, N, _ = cur_pts.shape
-        pad_pcs = np.ones(
-            (self.max_num_part, N, 3), dtype=np.float32) * self.pad_points
-        pad_pcs[:p] = cur_pts
-        data_dict['part_pcs'] = pad_pcs
+        data_dict['part_pcs'] = self._pad_data(cur_pts)
         # part poses
         cur_pose = cur_data['part_poses']  # p x (3 + 4)
         cur_pose = self._pad_data(cur_pose)
@@ -134,7 +126,7 @@ class PartNetPartDataset(Dataset):
         data_dict['part_quat'] = cur_pose[:, 3:]
         # valid part masks
         valids = np.zeros((self.max_num_part), dtype=np.float32)
-        valids[:num_parts] = 1
+        valids[:num_parts] = 1.
         data_dict['part_valids'] = valids
         # shape_id
         data_dict['shape_id'] = int(shape_id)
@@ -211,7 +203,6 @@ def build_partnet_dataloader(cfg):
         data_keys=cfg.data.data_keys,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
-        pad_points=cfg.data.pad_points,
     )
     train_loader = DataLoader(
         dataset=train_set,
@@ -219,7 +210,7 @@ def build_partnet_dataloader(cfg):
         shuffle=True,
         num_workers=cfg.exp.num_workers,
         pin_memory=True,
-        drop_last=False,
+        drop_last=True,
         persistent_workers=(cfg.exp.num_workers > 0),
     )
 
@@ -229,7 +220,6 @@ def build_partnet_dataloader(cfg):
         data_keys=cfg.data.data_keys,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
-        pad_points=cfg.data.pad_points,
     )
     val_loader = DataLoader(
         dataset=val_set,

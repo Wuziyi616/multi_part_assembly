@@ -20,6 +20,7 @@ class BaseModel(pl.LightningModule):
 
         self.cfg = cfg
 
+        self.semantic = (cfg.data.dataset != 'geometry')
         self.max_num_part = self.cfg.data.max_num_part
         self.pc_feat_dim = self.cfg.model.pc_feat_dim
 
@@ -194,13 +195,14 @@ class BaseModel(pl.LightningModule):
         """
         pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
 
-        # matching GT with predictions for lowest loss
+        # matching GT with predictions for lowest loss in semantic assembly
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
-        match_ids = data_dict['match_ids']
-        new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
-                                                pred_quat, gt_trans, gt_quat,
-                                                match_ids)
+        if self.semantic:
+            match_ids = data_dict['match_ids']
+            new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
+                                                    pred_quat, gt_trans,
+                                                    gt_quat, match_ids)
 
         # computing loss
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)

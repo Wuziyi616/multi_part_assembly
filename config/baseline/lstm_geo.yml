@@ -1,0 +1,27 @@
+exp:
+    weight_file: ""
+    num_workers: 4
+    batch_size: 32
+    num_epochs: 200
+    val_every: 10
+
+model:
+    encoder: "pointnet"
+    pc_feat_dim: 128
+    lstm_hidden_size: 256
+    noise_dim: 0
+
+loss:
+    sample_iter: 1
+    trans_loss_w: 1.
+    rot_pt_cd_loss_w: 10.
+    transform_pt_cd_loss_w: 10.
+
+data:
+    dataset: "geometry"
+    data_dir: "/scratch/ssd004/scratch/ziyiwu/data/assembly/FractureSmall"
+    data_fn: "data.{}.csv"
+    data_keys: ('part_ids', 'instance_label')
+
+optimizer:
+    lr: 1e-3

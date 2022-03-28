@@ -25,14 +25,7 @@ class DGLModel(BaseModel):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self.cfg = cfg
-
-        self.max_num_part = self.cfg.data.max_num_part
-        self.pc_feat_dim = self.cfg.model.pc_feat_dim
         self.iter = self.cfg.model.gnn_iter
-
-        # loss configs
-        self.sample_iter = self.cfg.loss.sample_iter
 
         self.encoder = self._init_encoder()
         self.mlp3s = self._init_mlp3s()
@@ -66,8 +59,10 @@ class DGLModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label, last_pose and noise as input
+        feat_dim = self.pc_feat_dim * 2 + self.max_num_part + 7 if \
+            self.semantic else self.pc_feat_dim * 2 + 7
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=self.pc_feat_dim * 2 + self.max_num_part + 7,
+            feat_dim=feat_dim,
             noise_dim=self.cfg.model.noise_dim,
         )
         pose_predictors = _get_clones(pose_predictor, self.iter)
@@ -91,7 +86,7 @@ class DGLModel(BaseModel):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
-                - instance_label: [B, P, P]
+                - instance_label: [B, P, P (0 in geometry assembly)]
                 - part_ids: [B, P]
                 - valid_matrix: [B, P, P]
             may contains:
@@ -116,7 +111,7 @@ class DGLModel(BaseModel):
 
         # construct same_class_list for GNN node aggregation/separation
         class_list = data_dict.get('class_list', None)
-        if class_list is None:
+        if class_list is None and self.semantic:
             part_valids = data_dict['part_valids']
             part_ids = data_dict['part_ids']
             class_list = [[] for _ in range(B)]
@@ -131,7 +126,7 @@ class DGLModel(BaseModel):
             if iter_ind >= 1:
                 pose_feats = self.pose_extractor(pred_pose)  # [B, P, C]
                 # merge features of parts in the same class
-                if iter_ind % 2 == 1:
+                if iter_ind % 2 == 1 and self.semantic:
                     pose_feat = torch.zeros_like(pose_feats).detach()
                     part_feats_copy = torch.zeros_like(part_feats).detach()
                     for i in range(B):
@@ -143,6 +138,7 @@ class DGLModel(BaseModel):
                                     dim=-2, keepdim=True)[0]
                 else:
                     pose_feat = pose_feats
+                    part_feats_copy = part_feats
 
                 # predict new graph relations
                 pose_feat1 = pose_feat.unsqueeze(1).repeat(1, P, 1, 1)
@@ -155,14 +151,12 @@ class DGLModel(BaseModel):
                     new_relation = self.relation_predictor(
                         input_relation.view(B, P * P, -1)).view(B, P, P)
                 relation_matrix = new_relation.double() * valid_matrix
+            else:
+                part_feats_copy = part_feats
 
             # mlp3, GNN nodes pairwise interaction
-            if iter_ind % 2 == 1:
-                part_feat1 = part_feats_copy.unsqueeze(2).repeat(1, 1, P, 1)
-                part_feat2 = part_feats_copy.unsqueeze(1).repeat(1, P, 1, 1)
-            else:
-                part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)
-                part_feat2 = part_feats.unsqueeze(1).repeat(1, P, 1, 1)
+            part_feat1 = part_feats_copy.unsqueeze(2).repeat(1, 1, P, 1)
+            part_feat2 = part_feats_copy.unsqueeze(1).repeat(1, P, 1, 1)
             input_3 = torch.cat([part_feat1, part_feat2], dim=-1)
             part_relation = self.mlp3s[iter_ind](input_3.view(B * P, P, -1))
             part_relation = part_relation.view(B, P, P, -1).double()

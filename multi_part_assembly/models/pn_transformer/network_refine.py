@@ -60,7 +60,9 @@ class PNTransformerRefine(PNTransformer):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label and noise as input
-        dim = self.pc_feat_dim + self.max_num_part + 7
+        dim = self.pc_feat_dim + 7
+        if self.semantic:
+            dim += self.max_num_part
         if self.pose_pc_feat:
             dim += self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
@@ -77,7 +79,7 @@ class PNTransformerRefine(PNTransformer):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
-                - instance_label: [B, P, P]
+                - instance_label: [B, P, P (0 in geometry assembly)]
             may contains:
                 - pc_feats: [B, P, C] (reused) or None
         """
@@ -134,11 +136,10 @@ class PNTransformerRefine(PNTransformer):
     def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):
         """Predict poses and calculate loss."""
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        instance_label = data_dict['instance_label']
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
-            'instance_label': instance_label,
+            'instance_label': data_dict['instance_label'],
             'pc_feats': out_dict.get('pc_feats', None),
         }
 

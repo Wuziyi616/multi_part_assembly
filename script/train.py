@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from multi_part_assembly.datasets import build_partnet_dataloader
+from multi_part_assembly.datasets import build_dataset
 from multi_part_assembly.models import build_model
 from multi_part_assembly.utils import PCAssemblyLogCallback
 
@@ -18,7 +18,7 @@ def main(cfg):
     model = build_model(cfg)
 
     # Initialize dataloaders
-    train_loader, val_loader = build_partnet_dataloader(cfg)
+    train_loader, val_loader = build_dataset(cfg)
 
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
