@@ -2,7 +2,7 @@ from .partnet_data import build_partnet_dataloader
 from .geometry_data import build_geometry_dataloader
 
 
-def build_dataset(cfg):
+def build_dataloader(cfg):
     if cfg.data.dataset == 'partnet':
         return build_partnet_dataloader(cfg)
     elif cfg.data.dataset == 'geometry':

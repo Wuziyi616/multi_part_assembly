@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from multi_part_assembly.datasets import build_dataset
+from multi_part_assembly.datasets import build_dataloader
 from multi_part_assembly.models import build_model
 from multi_part_assembly.utils import PCAssemblyLogCallback
 
@@ -18,7 +18,7 @@ def main(cfg):
     model = build_model(cfg)
 
     # Initialize dataloaders
-    train_loader, val_loader = build_dataset(cfg)
+    train_loader, val_loader = build_dataloader(cfg)
 
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
@@ -55,6 +55,7 @@ def main(cfg):
         logger=logger,
         gpus=all_gpus,
         # TODO: very strange, I still cannot train DDP on Vector...
+        # TODO: modify this line if you can run DDP on the cluster
         # strategy='ddp' if len(all_gpus) > 1 else None,
         strategy='dp' if len(all_gpus) > 1 else None,
         max_epochs=cfg.exp.num_epochs,
@@ -92,32 +93,14 @@ def main(cfg):
     print('Done training...')
 
 
-def test(cfg):
-    assert args.weight or cfg.exp.weight_file, 'Please provide weight to test'
-    weight = args.weight if args.weight else cfg.exp.weight_file
-
-    # Initialize model
-    model = build_model(cfg)
-
-    # Initialize dataloaders
-    _, val_loader = build_partnet_dataloader(cfg)
-
-    trainer = pl.Trainer(gpus=[0])
-
-    trainer.test(model, val_loader, ckpt_path=weight)
-
-    print('Done testing...')
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
     parser.add_argument('--yml_file', required=True, type=str, help='.yml')
-    parser.add_argument('--gpus', nargs='+', default=-1, type=int)
+    parser.add_argument('--gpus', nargs='+', default=[0], type=int)
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--fp16', action='store_true', help='FP16 training')
     parser.add_argument('--cudnn', action='store_true', help='cudnn benchmark')
-    parser.add_argument('--test', action='store_true', help='test model')
     args = parser.parse_args()
 
     sys.path.append(os.path.dirname(args.cfg_file))
@@ -125,10 +108,6 @@ if __name__ == '__main__':
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 
-    if args.gpus == -1:
-        args.gpus = [
-            0,
-        ]
     cfg.exp.gpus = args.gpus
     if args.weight:
         cfg.exp.weight_file = args.weight
@@ -136,7 +115,4 @@ if __name__ == '__main__':
     cfg.freeze()
     print(cfg)
 
-    if args.test:
-        test(cfg)
-    else:
-        main(cfg)
+    main(cfg)

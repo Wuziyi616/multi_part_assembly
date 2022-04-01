@@ -70,6 +70,9 @@ class PartNetPartDataset(Dataset):
             'part_valids': MAX_NUM
                 1 for shape parts, 0 for padded zeros.
 
+            'data_id': int
+                ID of the data.
+
             'shape_id': int
                 ID of the shape.
 
@@ -128,7 +131,8 @@ class PartNetPartDataset(Dataset):
         valids = np.zeros((self.max_num_part), dtype=np.float32)
         valids[:num_parts] = 1.
         data_dict['part_valids'] = valids
-        # shape_id
+        # data_id and shape_id
+        data_dict['data_id'] = index
         data_dict['shape_id'] = int(shape_id)
 
         for key in self.data_keys:
@@ -223,7 +227,7 @@ def build_partnet_dataloader(cfg):
     )
     val_loader = DataLoader(
         dataset=val_set,
-        batch_size=cfg.exp.batch_size,
+        batch_size=cfg.exp.batch_size * 2,
         shuffle=False,
         num_workers=cfg.exp.num_workers,
         pin_memory=True,

@@ -128,6 +128,9 @@ class GeometryPartDataset(Dataset):
 
             'instance_label': MAX_NUM x 0, useless
 
+            'data_id': int
+                ID of the data.
+
         }
         """
 
@@ -140,6 +143,8 @@ class GeometryPartDataset(Dataset):
         valids = np.zeros((self.max_num_part), dtype=np.float32)
         valids[:num_parts] = 1.
         data_dict['part_valids'] = valids
+        # data_id
+        data_dict['data_id'] = index
 
         for key in self.data_keys:
             if key == 'part_ids':
@@ -197,7 +202,7 @@ def build_geometry_dataloader(cfg):
     )
     val_loader = DataLoader(
         dataset=val_set,
-        batch_size=cfg.exp.batch_size,
+        batch_size=cfg.exp.batch_size * 2,
         shuffle=False,
         num_workers=cfg.exp.num_workers,
         pin_memory=True,

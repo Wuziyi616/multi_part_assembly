@@ -15,7 +15,7 @@ Install this package: run `pip install -e .`
 
 Our config system is built upon [yacs](https://github.com/rbgirshick/yacs). In general, a `.py` file will serve as the base config of this model, which contains all the options you need for this model. Then, you will create several `.yml` files, each of which overwrites some of the configurations of the base file, where you can conduct different experiments based on it.
 
-To train a model, simply run `python script/train.py --cfg_file multi_part_assembly/config/pn_transformer.py --yml_file config/baseline/pn_transformer.yml`. Optional arguments:
+To train a model, simply run `python script/train.py --cfg_file multi_part_assembly/config/baseline/global.py --yml_file config/baseline/global.yml`. Optional arguments:
 
 - `--gpus`: setting training GPUs
 - `--weight`: loading pre-trained weights
@@ -24,4 +24,4 @@ To train a model, simply run `python script/train.py --cfg_file multi_part_assem
 
 ## Testing
 
-Similar to training, to test a pre-trained weight, simply run `python script/train.py --cfg_file multi_part_assembly/config/pn_transformer.py --yml_file config/baseline/pn_transformer.yml --test --weight path/to/weight`
+Similar to training, to test a pre-trained weight, simply run `python script/test.py --cfg_file multi_part_assembly/config/baseline/global.py --yml_file config/baseline/global.yml --weight path/to/weight`

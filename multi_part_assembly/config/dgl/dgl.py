@@ -23,6 +23,8 @@ _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.model.pc_feat_dim = 256
 _C.model.gnn_iter = 5
 _C.model.noise_dim = 32  # stochastic PoseRegressor
+_C.model.pc_feats_copy_sg = False
+_C.model.pose_pc_feat = True
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and

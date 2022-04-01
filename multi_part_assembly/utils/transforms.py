@@ -127,7 +127,7 @@ def qrot(q, v):
     return (v + 2 * (q[:, :1] * uv + uuv)).view(original_shape)
 
 
-def qeuler(q, order, epsilon=0):
+def qeuler(q, order, epsilon=0, to_degree=False):
     """
     Convert quaternion(s) q to Euler angles.
     Expects a tensor of shape (*, 4), where * denotes any number of dimensions.
@@ -177,7 +177,10 @@ def qeuler(q, order, epsilon=0):
     else:
         raise
 
-    return torch.stack((x, y, z), dim=1).view(original_shape)
+    euler = torch.stack((x, y, z), dim=1).view(original_shape)
+    if to_degree:
+        euler = euler * 180. / np.pi
+    return euler
 
 
 def qtransform(t, q, v):

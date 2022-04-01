@@ -59,8 +59,11 @@ class DGLModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label, last_pose and noise as input
-        feat_dim = self.pc_feat_dim * 2 + self.max_num_part + 7 if \
-            self.semantic else self.pc_feat_dim * 2 + 7
+        feat_dim = self.pc_feat_dim + 7
+        if self.semantic:
+            feat_dim += self.max_num_part
+        if self.cfg.model.pose_pc_feat:
+            feat_dim += self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
             feat_dim=feat_dim,
             noise_dim=self.cfg.model.noise_dim,
@@ -127,15 +130,19 @@ class DGLModel(BaseModel):
                 pose_feats = self.pose_extractor(pred_pose)  # [B, P, C]
                 # merge features of parts in the same class
                 if iter_ind % 2 == 1 and self.semantic:
-                    pose_feat = torch.zeros_like(pose_feats).detach()
-                    part_feats_copy = torch.zeros_like(part_feats).detach()
+                    pose_feat = pose_feats.clone()
+                    part_feats_copy = part_feats.clone()
                     for i in range(B):
                         for cls_lst in class_list[i]:
+                            if len(cls_lst) <= 1:
+                                continue
                             pose_feat[i, cls_lst] = pose_feats[i, cls_lst].\
                                 max(dim=-2, keepdim=True)[0]
                             part_feats_copy[i, cls_lst] = part_feats[
                                 i, cls_lst].max(
                                     dim=-2, keepdim=True)[0]
+                    if self.cfg.model.pc_feats_copy_sg:
+                        part_feats_copy = part_feats_copy.detach()
                 else:
                     pose_feat = pose_feats
                     part_feats_copy = part_feats
@@ -174,8 +181,13 @@ class DGLModel(BaseModel):
             part_feats = self.mlp4s[iter_ind](input_4)  # B x P x F
 
             # mlp5, pose prediction
-            input_5 = torch.cat(
-                [local_feats, part_feats, instance_label, pred_pose], dim=-1)
+            if self.cfg.model.pose_pc_feat:
+                input_5 = torch.cat(
+                    [local_feats, part_feats, instance_label, pred_pose],
+                    dim=-1)
+            else:
+                input_5 = torch.cat([part_feats, instance_label, pred_pose],
+                                    dim=-1)
             pred_quat, pred_trans = self.pose_predictors[iter_ind](input_5)
             pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
 
@@ -194,7 +206,7 @@ class DGLModel(BaseModel):
         pred_dict = {
             'quat': pred_quat,  # [(T, )B, P, 4]
             'trans': pred_trans,  # [(T, )B, P, 3]
-            'part_feats': part_feats,  # [B, P, C]
+            'part_feats': local_feats,  # [B, P, C]
             'class_list': class_list,  # batch of list of list
         }
         return pred_dict

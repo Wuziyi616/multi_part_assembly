@@ -1,6 +1,6 @@
 import torch
 
-from .transforms import qrot, qtransform, get_sym_point_list
+from .transforms import qrot, qtransform, qeuler, get_sym_point_list
 from .chamfer import chamfer_distance
 
 
@@ -183,6 +183,58 @@ def repulsion_cd_loss(part_pcs, valids, thre):
         valids[:, :, None] * valids[:, None, :]
     loss_per_data = (cd * valid_mask).sum([1, 2]) / valid_mask.sum([1, 2])
     return loss_per_data
+
+
+def trans_metrics(trans1, trans2, valids, metric):
+    """Evaluation metrics for transformation.
+
+    Metrics used in the NSM paper.
+
+    Args:
+        trans1: [B, P, 3]
+        trans2: [B, P, 3]
+        valids: [B, P], 1 for input parts, 0 for padded parts
+        metric: str, 'mse', 'rmse' or 'mae'
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    assert metric in ['mse', 'rmse', 'mae']
+    if metric == 'mse':
+        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)  # [B, P]
+    elif metric == 'rmse':
+        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)**0.5
+    else:
+        metric_per_data = (trans1 - trans2).abs().mean(dim=-1)
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
+
+
+def rot_metrics(quat1, quat2, valids, metric):
+    """Evaluation metrics for rotation in euler angle (degree) space.
+
+    Metrics used in the NSM paper.
+
+    Args:
+        quat1: [B, P, 4]
+        quat2: [B, P, 4]
+        valids: [B, P], 1 for input parts, 0 for padded parts
+        metric: str, 'mse', 'rmse' or 'mae'
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    assert metric in ['mse', 'rmse', 'mae']
+    deg1 = qeuler(quat1, order='zyx', to_degree=True)
+    deg2 = qeuler(quat2, order='zyx', to_degree=True)
+    if metric == 'mse':
+        metric_per_data = (deg1 - deg2).pow(2).mean(dim=-1)  # [B, P]
+    elif metric == 'rmse':
+        metric_per_data = (deg1 - deg2).pow(2).mean(dim=-1)**0.5
+    else:
+        metric_per_data = (deg1 - deg2).abs().mean(dim=-1)
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
 
 
 def calc_part_acc(pts, trans1, trans2, quat1, quat2, valids):

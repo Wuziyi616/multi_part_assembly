@@ -8,7 +8,8 @@ from scipy.optimize import linear_sum_assignment
 from multi_part_assembly.utils import qtransform, chamfer_distance
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, calc_part_acc, calc_connectivity_acc
+    shape_cd_loss, calc_part_acc, calc_connectivity_acc, \
+    trans_metrics, rot_metrics
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -226,14 +227,21 @@ class BaseModel(pl.LightningModule):
             'transform_pt_cd_loss': transform_pt_cd_loss,
         }  # all loss are of shape [B]
 
-        # in eval, we also want to compute part_acc and connectivity_acc
+        # some specific evaluation metrics calculated in eval
         if not self.training:
+            # part_acc and connectivity_acc in DGL paper
             loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
                                                   new_trans, pred_quat,
                                                   new_quat, valids)
             if 'contact_points' in data_dict.keys():
                 loss_dict['connectivity_acc'] = calc_connectivity_acc(
                     pred_trans, pred_quat, data_dict['contact_points'])
+            # mse/rmse/mae of translation and rotation in NSM
+            for metric in ['mse', 'rmse', 'mae']:
+                loss_dict[f'trans_{metric}'] = trans_metrics(
+                    pred_trans, new_trans, valids, metric)
+                loss_dict[f'rot_{metric}'] = rot_metrics(
+                    pred_quat, new_quat, valids, metric)
 
         # return some intermediate variables for reusing
         out_dict = {
@@ -328,17 +336,39 @@ class BaseModel(pl.LightningModule):
             }],
         )
 
-    def sample_assembly(self, data_dict):
+    @torch.no_grad()
+    def sample_assembly(self, data_dict, ret_pcs=True):
         """Sample assembly for visualization."""
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        sample_pred_pcs = []
+        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        sample_pred_pcs, sample_pred_trans, sample_pred_quat = [], [], []
         for _ in range(self.sample_iter):
             out_dict = self.forward(data_dict)
             pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
-            pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
-            sample_pred_pcs.append(pred_pcs)
+            sample_pred_trans.append(pred_trans)
+            sample_pred_quat.append(pred_quat)
+            if ret_pcs:
+                pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
+                sample_pred_pcs.append(pred_pcs)
 
-        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        # only return transformation for further visualization
+        if not ret_pcs:
+            data_id = data_dict['data_id']
+            out_dict = {
+                'data_id': data_id,
+                'gt_trans': gt_trans,
+                'gt_quat': gt_quat,
+                'pred_trans': torch.stack(sample_pred_trans, dim=1),
+                'pred_quat': torch.stack(sample_pred_quat, dim=1),
+            }
+            out_dict = {k: v.cpu().numpy() for k, v in out_dict.items()}
+            # to list of dict
+            out_dict = [{k: v[i]
+                         for k, v in out_dict.items()}
+                        for i in range(len(data_id))]
+            return out_dict
+
+        # return GT assembly and predicted assembly
         gt_pcs = qtransform(gt_trans, gt_quat, part_pcs)  # [B, P, N, 3]
 
         colors = np.array(self.cfg.data.colors)
