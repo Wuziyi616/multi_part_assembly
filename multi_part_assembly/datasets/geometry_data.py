@@ -17,6 +17,7 @@ class GeometryPartDataset(Dataset):
         data_dir,
         data_fn,
         data_keys,
+        category='',
         num_points=1000,
         max_num_part=20,
         overfit=-1,
@@ -25,7 +26,8 @@ class GeometryPartDataset(Dataset):
         self.data_dir = data_dir
         with open(os.path.join(data_dir, data_fn), 'r') as f:
             self.data_list = [
-                line.strip() for line in f.readlines() if 'fractured' in line
+                line.strip() for line in f.readlines()
+                if 'fractured' in line and category in line
             ]
         if overfit > 0:
             self.data_list = self.data_list[:overfit]
@@ -178,6 +180,7 @@ def build_geometry_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
+        category=cfg.data.category,
         num_points=cfg.data.num_pc_points,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
@@ -196,6 +199,7 @@ def build_geometry_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('val'),
         data_keys=cfg.data.data_keys,
+        category=cfg.data.category,
         num_points=cfg.data.num_pc_points,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,

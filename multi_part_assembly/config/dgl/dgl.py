@@ -20,11 +20,9 @@ _C.exp.val_sample_vis = 5  # sample visualizations
 # Model related
 _C.model = CN()
 _C.model.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
-_C.model.pc_feat_dim = 256
+_C.model.pc_feat_dim = 128
 _C.model.gnn_iter = 5
 _C.model.noise_dim = 32  # stochastic PoseRegressor
-_C.model.pc_feats_copy_sg = False
-_C.model.pose_pc_feat = True
 
 # Loss related
 # default setting follows GNN paper, use L2 trans loss, CD of rotated parts and
@@ -42,6 +40,7 @@ _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
 _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
                      'contact_points', 'valid_matrix')
+_C.data.category = ''  # useful in geometry dataset
 _C.data.num_pc_points = 1000  # points per part
 _C.data.max_num_part = 20
 _C.data.overfit = -1

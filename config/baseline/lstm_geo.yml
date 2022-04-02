@@ -19,9 +19,10 @@ loss:
 
 data:
     dataset: "geometry"
-    data_dir: "/scratch/ssd004/scratch/ziyiwu/data/assembly/FractureSmall"
-    data_fn: "data.{}.csv"
+    data_dir: "/scratch/ssd004/scratch/ziyiwu/data/assembly"
+    data_fn: "semantic_data.{}.csv"
     data_keys: ('part_ids', 'instance_label')
+    category: ""
 
 optimizer:
     lr: 1e-3

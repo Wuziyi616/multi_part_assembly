@@ -7,7 +7,7 @@ exp:
 
 model:
     encoder: "pointnet"
-    pc_feat_dim: 256
+    pc_feat_dim: 128
     gnn_iter: 5
     noise_dim: 32
 

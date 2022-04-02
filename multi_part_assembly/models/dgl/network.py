@@ -62,8 +62,6 @@ class DGLModel(BaseModel):
         feat_dim = self.pc_feat_dim + 7
         if self.semantic:
             feat_dim += self.max_num_part
-        if self.cfg.model.pose_pc_feat:
-            feat_dim += self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
             feat_dim=feat_dim,
             noise_dim=self.cfg.model.noise_dim,
@@ -141,8 +139,9 @@ class DGLModel(BaseModel):
                             part_feats_copy[i, cls_lst] = part_feats[
                                 i, cls_lst].max(
                                     dim=-2, keepdim=True)[0]
-                    if self.cfg.model.pc_feats_copy_sg:
-                        part_feats_copy = part_feats_copy.detach()
+                    # the official implementation performs stop gradient
+                    # see https://github.com/hyperplane-lab/Generative-3D-Part-Assembly/blob/main/exps/Our_Method-dynamic_graph_learning/models/model_dynamic.py#L236
+                    part_feats_copy = part_feats_copy.detach()
                 else:
                     pose_feat = pose_feats
                     part_feats_copy = part_feats
@@ -181,13 +180,8 @@ class DGLModel(BaseModel):
             part_feats = self.mlp4s[iter_ind](input_4)  # B x P x F
 
             # mlp5, pose prediction
-            if self.cfg.model.pose_pc_feat:
-                input_5 = torch.cat(
-                    [local_feats, part_feats, instance_label, pred_pose],
-                    dim=-1)
-            else:
-                input_5 = torch.cat([part_feats, instance_label, pred_pose],
-                                    dim=-1)
+            input_5 = torch.cat([part_feats, instance_label, pred_pose],
+                                dim=-1)
             pred_quat, pred_trans = self.pose_predictors[iter_ind](input_5)
             pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
 

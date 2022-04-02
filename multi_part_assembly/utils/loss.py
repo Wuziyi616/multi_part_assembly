@@ -227,6 +227,13 @@ def rot_metrics(quat1, quat2, valids, metric):
     assert metric in ['mse', 'rmse', 'mae']
     deg1 = qeuler(quat1, order='zyx', to_degree=True)
     deg2 = qeuler(quat2, order='zyx', to_degree=True)
+    # since euler angle has the discontinuity at 180
+    # -179 and +179 actually only has an error of 2 degree
+    # convert -179 to 181
+    deg2_offset = deg2 + 360.
+    diff1 = (deg1 - deg2).abs()
+    diff2 = (deg1 - deg2_offset).abs()
+    deg2 = torch.where(diff1 < diff2, deg2, deg2_offset)
     if metric == 'mse':
         metric_per_data = (deg1 - deg2).pow(2).mean(dim=-1)  # [B, P]
     elif metric == 'rmse':

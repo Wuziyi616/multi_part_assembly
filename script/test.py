@@ -23,27 +23,35 @@ def test(cfg):
 
     print('Done testing...')
 
-    # save some predictions for visualization
-    if args.vis > 0:
-        vis_num = args.vis
-        vis_lst = []
-        for batch in val_loader:
-            batch = {k: v.to(model.device) for k, v in batch.items()}
-            out_dict = model.sample_assembly(batch, ret_pcs=False)
-            """list of dicts, each dict contains:
-                - data_id: int, index input of dataset.__getitem__
-                - gt_trans/quat: [P, 3/4]
-                - pred_trans/quat: [P, 3/4]
-            """
-            vis_lst += out_dict
-            if len(vis_lst) >= vis_num:
-                break
-        # save results
-        save_dir = os.path.dirname(cfg.exp.weight_file)
-        save_name = os.path.join(save_dir, 'vis.pkl')
-        pickle_dump(vis_lst, save_name)
 
-        print(f'Saving {vis_num} predictions for visualization...')
+def visualize(cfg):
+    # Initialize model
+    model = build_model(cfg).cuda()
+
+    # Initialize dataloaders
+    _, val_loader = build_dataloader(cfg)
+
+    # save some predictions for visualization
+    vis_num = args.vis
+    vis_lst = []
+    for batch in val_loader:
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        out_dict = model.sample_assembly(batch, ret_pcs=False)
+        """list of dicts, each dict contains:
+            - data_id: int, index input of dataset.__getitem__
+            - gt_trans/quat: [P, 3/4]
+            - pred_trans/quat: [P, 3/4]
+        """
+        vis_lst += out_dict
+        if len(vis_lst) >= vis_num:
+            break
+
+    # save results
+    save_dir = os.path.dirname(cfg.exp.weight_file)
+    save_name = os.path.join(save_dir, 'vis.pkl')
+    pickle_dump(vis_lst, save_name)
+
+    print(f'Saving {vis_num} predictions for visualization...')
 
 
 if __name__ == '__main__':
@@ -67,4 +75,7 @@ if __name__ == '__main__':
     cfg.freeze()
     print(cfg)
 
-    test(cfg)
+    if args.vis > 0:
+        visualize(cfg)
+    else:
+        test(cfg)
