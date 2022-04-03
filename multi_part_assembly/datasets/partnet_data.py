@@ -12,12 +12,14 @@ class PartNetPartDataset(Dataset):
         data_dir,
         data_fn,
         data_keys,
+        min_num_part=2,
         max_num_part=20,
         overfit=-1,
     ):
         # store parameters
         self.data_dir = data_dir  # './data'
         self.data_fn = data_fn  # 'Chair.train.npy'
+        self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
         self.level = 3  # fixed in the paper
 
@@ -50,7 +52,7 @@ class PartNetPartDataset(Dataset):
 
         # if current shape has too much parts, we randomly load another data
         num_parts = cur_data['part_pcs'].shape[0]  # let's call it `p`
-        if num_parts > self.max_num_part:
+        if num_parts > self.max_num_part or num_parts < self.min_num_part:
             return self._rand_another()
         """
         `cur_data` is dict stored in separate npz files with following keys:
@@ -205,6 +207,7 @@ def build_partnet_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
+        min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )
@@ -222,6 +225,7 @@ def build_partnet_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('val'),
         data_keys=cfg.data.data_keys,
+        min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )

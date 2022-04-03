@@ -141,7 +141,9 @@ class DGLModel(BaseModel):
                                     dim=-2, keepdim=True)[0]
                     # the official implementation performs stop gradient
                     # see https://github.com/hyperplane-lab/Generative-3D-Part-Assembly/blob/main/exps/Our_Method-dynamic_graph_learning/models/model_dynamic.py#L236
-                    part_feats_copy = part_feats_copy.detach()
+                    # we discover that detach sometimes cause unstable training
+                    # so we disable it here
+                    # part_feats_copy = part_feats_copy.detach()
                 else:
                     pose_feat = pose_feats
                     part_feats_copy = part_feats

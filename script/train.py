@@ -97,6 +97,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
     parser.add_argument('--yml_file', required=True, type=str, help='.yml')
+    parser.add_argument('--category', type=str, default='', help='data subset')
     parser.add_argument('--gpus', nargs='+', default=[0], type=int)
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--fp16', action='store_true', help='FP16 training')
@@ -108,6 +109,7 @@ if __name__ == '__main__':
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 
+    cfg.data.category = args.category
     cfg.exp.gpus = args.gpus
     if args.weight:
         cfg.exp.weight_file = args.weight

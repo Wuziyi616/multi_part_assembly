@@ -3,7 +3,6 @@ import random
 
 import trimesh
 import numpy as np
-import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
 from torch.utils.data import Dataset, DataLoader
@@ -19,24 +18,38 @@ class GeometryPartDataset(Dataset):
         data_keys,
         category='',
         num_points=1000,
+        min_num_part=2,
         max_num_part=20,
         overfit=-1,
     ):
         # store parameters
+        self.category = category if category != 'all' else ''
         self.data_dir = data_dir
-        with open(os.path.join(data_dir, data_fn), 'r') as f:
-            self.data_list = [
-                line.strip() for line in f.readlines()
-                if 'fractured' in line and category in line
-            ]
+        self.data_list = self._read_data(data_fn)
         if overfit > 0:
             self.data_list = self.data_list[:overfit]
 
+        self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
         self.num_points = num_points
 
         # additional data to load, e.g. ('part_ids', 'instance_label')
         self.data_keys = data_keys
+
+    def _read_data(self, data_fn):
+        with open(os.path.join(self.data_dir, data_fn), 'r') as f:
+            mesh_list = [
+                line.strip() for line in f.readlines() if self.category in line
+            ]
+        data_list = []
+        for mesh in mesh_list:
+            frac_list = [
+                os.path.join(mesh, frac)
+                for frac in os.listdir(os.path.join(self.data_dir, mesh))
+                if 'fractured' in frac
+            ]
+            data_list += frac_list
+        return data_list
 
     @staticmethod
     def _recenter_pc(pc):
@@ -82,7 +95,7 @@ class GeometryPartDataset(Dataset):
         data_folder = os.path.join(self.data_dir, data_folder)
         mesh_files = os.listdir(data_folder)
         mesh_files.sort()
-        if len(mesh_files) > self.max_num_part or len(mesh_files) <= 1:
+        if not self.min_num_part <= len(mesh_files) <= self.max_num_part:
             raise ValueError
 
         meshes = [
@@ -182,6 +195,7 @@ def build_geometry_dataloader(cfg):
         data_keys=cfg.data.data_keys,
         category=cfg.data.category,
         num_points=cfg.data.num_pc_points,
+        min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )
@@ -201,6 +215,7 @@ def build_geometry_dataloader(cfg):
         data_keys=cfg.data.data_keys,
         category=cfg.data.category,
         num_points=cfg.data.num_pc_points,
+        min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )

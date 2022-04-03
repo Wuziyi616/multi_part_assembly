@@ -76,6 +76,8 @@ class BaseModel(pl.LightningModule):
             for k, v in losses.items()
         }
         print('; '.join([f'{k}: {v.item():.6f}' for k, v in avg_loss.items()]))
+        # TODO: this is a hack to get results outside `Trainer.test()` function
+        self.test_results = avg_loss
 
     def forward_pass(self, data_dict, mode, optimizer_idx):
         """Forward pass: loss computation and logging.

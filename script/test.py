@@ -1,7 +1,9 @@
 import os
 import sys
+import copy
 import argparse
 import importlib
+import numpy as np
 
 import pytorch_lightning as pl
 
@@ -20,6 +22,39 @@ def test(cfg):
     trainer = pl.Trainer(gpus=[0])
 
     trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
+
+    # if `args.category` is 'all', we also compute per-category results
+    # TODO: currently we hard-code to support Breaking Bad dataset
+    all_category = [
+        'BeerBottle', 'Bowl', 'Cup', 'DrinkingUtensil', 'Mug', 'Plate',
+        'Spoon', 'Teacup', 'ToyFigure', 'WineBottle', 'Bottle', 'Cookie',
+        'DrinkBottle', 'Mirror', 'PillBottle', 'Ring', 'Statue', 'Teapot',
+        'Vase', 'WineGlass'
+    ]
+    all_metrics = {
+        'rot_rmse': 1.,
+        'rot_mae': 1.,
+        'trans_rmse': 100.,
+        'trans_mae': 100.,
+        'transform_pt_cd_loss': 1000.,
+        'part_acc': 100.,
+    }
+    all_results = {metric: [] for metric in all_metrics.keys()}
+    for cat in all_category:
+        cfg = copy.deepcopy(cfg_backup)
+        cfg.data.category = cat
+        _, val_loader = build_dataloader(cfg)
+        trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
+        results = trainer.test_results
+        results = {k[5:]: v.detach().cpu().numpy() for k, v in results.items()}
+        for metric in all_metrics.keys():
+            all_results[metric].append(results[metric] * all_metrics[metric])
+    all_results = {k: np.array(v).round(1) for k, v in all_results.items()}
+    # format for latex table
+    for metric, result in all_metrics.items():
+        print(f'{metric}:')
+        result = [str(res) for res in result.tolist()]
+        print(' & '.join(result))
 
     print('Done testing...')
 
@@ -58,6 +93,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
     parser.add_argument('--yml_file', required=True, type=str, help='.yml')
+    parser.add_argument('--category', type=str, default='', help='data subset')
+    parser.add_argument('--min_num_part', type=int, default=-1)
+    parser.add_argument('--max_num_part', type=int, default=-1)
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--vis', type=int, default=-1, help='visualization')
     args = parser.parse_args()
@@ -67,11 +105,18 @@ if __name__ == '__main__':
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 
+    if args.category:
+        cfg.data.category = args.category
+    if args.min_num_part > 0:
+        cfg.data.min_num_part = args.min_num_part
+    if args.max_num_part > 0:
+        cfg.data.max_num_part = args.max_num_part
     if args.weight:
         cfg.exp.weight_file = args.weight
     else:
         assert cfg.exp.weight_file, 'Please provide weight to test'
 
+    cfg_backup = copy.deepcopy(cfg)
     cfg.freeze()
     print(cfg)
 

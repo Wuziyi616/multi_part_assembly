@@ -46,7 +46,9 @@ _C.data.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
 _C.data.data_fn = 'Chair.{}.npy'
 _C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
                      'contact_points')
+_C.data.category = ''  # useful in geometry dataset
 _C.data.num_pc_points = 1000  # points per part
+_C.data.min_num_part = 2
 _C.data.max_num_part = 20
 _C.data.overfit = -1
 _C.data.colors = [
