@@ -23,18 +23,26 @@ class PartNetPartDataset(Dataset):
         self.max_num_part = max_num_part  # ignore shapes with more parts
         self.level = 3  # fixed in the paper
 
-        # array of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
-        self.shape_ids = np.load(os.path.join(self.data_dir, data_fn))
+        # list of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
+        self.shape_ids = self._read_data(data_fn)
         if overfit > 0:
             self.shape_ids = self.shape_ids[:overfit]
 
         # additional data to load, e.g. ('part_ids', 'instance_label')
         self.data_keys = data_keys
 
-    def _rand_another(self):
-        """Randomly load another data when current shape has too much parts."""
-        index = np.random.choice(len(self))
-        return self.__getitem__(index)
+    def _read_data(self, data_fn):
+        """Filter out invalid number of parts."""
+        shape_ids = np.load(os.path.join(self.data_dir, data_fn))
+        valid_shape_ids = []
+        for shape_id in shape_ids:
+            cur_data_fn = os.path.join(self.data_dir, 'shape_data',
+                                       f'{shape_id}_level{self.level}.npy')
+            cur_data = np.load(cur_data_fn, allow_pickle=True).item()
+            num_parts = cur_data['part_pcs'].shape[0]
+            if self.min_num_part <= num_parts <= self.max_num_part:
+                valid_shape_ids.append(shape_id)
+        return valid_shape_ids
 
     def _pad_data(self, data):
         """Pad data to shape [`self.max_num_part`, data.shape[1], ...]."""
@@ -50,10 +58,8 @@ class PartNetPartDataset(Dataset):
                                    f'{shape_id}_level{self.level}.npy')
         cur_data = np.load(cur_data_fn, allow_pickle=True).item()
 
-        # if current shape has too much parts, we randomly load another data
         num_parts = cur_data['part_pcs'].shape[0]  # let's call it `p`
-        if num_parts > self.max_num_part or num_parts < self.min_num_part:
-            return self._rand_another()
+        assert self.min_num_part <= num_parts <= self.max_num_part
         """
         `cur_data` is dict stored in separate npz files with following keys:
             'part_pcs', 'part_poses', 'part_ids', 'geo_part_ids', 'sym'

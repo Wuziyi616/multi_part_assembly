@@ -15,6 +15,8 @@ loss:
     trans_loss_w: 1.
     rot_pt_cd_loss_w: 10.
     transform_pt_cd_loss_w: 10.
+    rot_loss: ""
+    rot_loss_w: 1.
 
 data:
     dataset: "geometry"

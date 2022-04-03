@@ -9,7 +9,7 @@ from multi_part_assembly.utils import qtransform, chamfer_distance
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
     shape_cd_loss, calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics
+    trans_metrics, rot_metrics, rot_l2_loss, rot_cosine_loss
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -228,6 +228,14 @@ class BaseModel(pl.LightningModule):
             'rot_pt_cd_loss': rot_pt_cd_loss,
             'transform_pt_cd_loss': transform_pt_cd_loss,
         }  # all loss are of shape [B]
+
+        # TODO: direct regression loss on quat?
+        if self.cfg.loss.rot_loss:
+            if self.cfg.loss.rot_loss == 'l2':
+                rot_loss = rot_l2_loss(pred_quat, new_quat, valids)
+            elif self.cfg.loss.rot_loss == 'cosine':
+                rot_loss = rot_cosine_loss(pred_quat, new_quat, valids)
+            loss_dict['rot_loss'] = rot_loss
 
         # some specific evaluation metrics calculated in eval
         if not self.training:

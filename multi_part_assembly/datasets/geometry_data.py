@@ -25,30 +25,34 @@ class GeometryPartDataset(Dataset):
         # store parameters
         self.category = category if category != 'all' else ''
         self.data_dir = data_dir
-        self.data_list = self._read_data(data_fn)
-        if overfit > 0:
-            self.data_list = self.data_list[:overfit]
-
         self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
         self.num_points = num_points
+
+        # list of fracture folder path
+        self.data_list = self._read_data(data_fn)
+        if overfit > 0:
+            self.data_list = self.data_list[:overfit]
 
         # additional data to load, e.g. ('part_ids', 'instance_label')
         self.data_keys = data_keys
 
     def _read_data(self, data_fn):
+        """Filter out invalid number of parts."""
         with open(os.path.join(self.data_dir, data_fn), 'r') as f:
             mesh_list = [
                 line.strip() for line in f.readlines() if self.category in line
             ]
         data_list = []
         for mesh in mesh_list:
-            frac_list = [
-                os.path.join(mesh, frac)
-                for frac in os.listdir(os.path.join(self.data_dir, mesh))
-                if 'fractured' in frac
-            ]
-            data_list += frac_list
+            for frac in os.listdir(os.path.join(self.data_dir, mesh)):
+                if 'fractured' not in frac:
+                    continue
+                frac = os.path.join(mesh, frac)
+                num_parts = len(os.listdir(os.path.join(self.data_dir, frac)))
+                if not self.min_num_part <= num_parts <= self.max_num_part:
+                    continue
+                data_list.append(frac)
         return data_list
 
     @staticmethod
@@ -84,11 +88,6 @@ class GeometryPartDataset(Dataset):
         pad_data[:data.shape[0]] = data
         return pad_data
 
-    def _rand_another(self):
-        """Randomly load another data when current shape has too much parts."""
-        index = random.choice(range(len(self)))
-        return self.__getitem__(index)
-
     def _get_pcs(self, data_folder):
         """Read mesh and sample point cloud from a folder."""
         # `data_folder`: xxx/plate/1d4093ad2dfad9df24be2e4f911ee4af/fractured_0
@@ -109,10 +108,7 @@ class GeometryPartDataset(Dataset):
         return np.stack(pcs, axis=0)
 
     def __getitem__(self, index):
-        try:
-            pcs = self._get_pcs(self.data_list[index])
-        except ValueError:
-            return self._rand_another()
+        pcs = self._get_pcs(self.data_list[index])
         num_parts = pcs.shape[0]
         cur_pts, cur_quat, cur_trans = [], [], []
         for i in range(num_parts):

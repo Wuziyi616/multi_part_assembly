@@ -19,10 +19,16 @@ def test(cfg):
     # Initialize dataloaders
     _, val_loader = build_dataloader(cfg)
 
-    trainer = pl.Trainer(gpus=[0])
+    all_gpus = list(cfg.exp.gpus)
+    trainer = pl.Trainer(
+        gpus=all_gpus,
+        strategy='dp' if len(all_gpus) > 1 else None,
+    )
 
     trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
 
+    if args.category != 'all':
+        return
     # if `args.category` is 'all', we also compute per-category results
     # TODO: currently we hard-code to support Breaking Bad dataset
     all_category = [
@@ -45,15 +51,17 @@ def test(cfg):
         cfg.data.category = cat
         _, val_loader = build_dataloader(cfg)
         trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
-        results = trainer.test_results
+        results = model.test_results
         results = {k[5:]: v.detach().cpu().numpy() for k, v in results.items()}
         for metric in all_metrics.keys():
             all_results[metric].append(results[metric] * all_metrics[metric])
     all_results = {k: np.array(v).round(1) for k, v in all_results.items()}
     # format for latex table
-    for metric, result in all_metrics.items():
+    for metric, result in all_results.items():
         print(f'{metric}:')
-        result = [str(res) for res in result.tolist()]
+        result = result.tolist()
+        result.append(np.mean(result).round(1))  # per-category mean
+        result = [str(res) for res in result]
         print(' & '.join(result))
 
     print('Done testing...')
@@ -96,6 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('--category', type=str, default='', help='data subset')
     parser.add_argument('--min_num_part', type=int, default=-1)
     parser.add_argument('--max_num_part', type=int, default=-1)
+    parser.add_argument('--gpus', nargs='+', default=[0], type=int)
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--vis', type=int, default=-1, help='visualization')
     args = parser.parse_args()
@@ -105,6 +114,7 @@ if __name__ == '__main__':
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 
+    cfg.exp.gpus = args.gpus
     if args.category:
         cfg.data.category = args.category
     if args.min_num_part > 0:
