@@ -62,7 +62,8 @@ def main(cfg):
         callbacks=[
             LearningRateMonitor('epoch'),
             checkpoint_callback,
-            assembly_callback,
+            # TODO: uncomment this if you want to visualize assembly results
+            # assembly_callback,
         ],
         precision=16 if args.fp16 else 32,  # FP16 training
         benchmark=args.cudnn,  # cudnn benchmark
@@ -109,8 +110,9 @@ if __name__ == '__main__':
     cfg = cfg.get_cfg_defaults()
     cfg.merge_from_file(args.yml_file)
 
-    cfg.data.category = args.category
     cfg.exp.gpus = args.gpus
+    if args.category:
+        cfg.data.category = args.category
     if args.weight:
         cfg.exp.weight_file = args.weight
 

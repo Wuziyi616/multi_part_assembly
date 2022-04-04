@@ -44,6 +44,7 @@ echo "#!/bin/bash
 #SBATCH --gres=gpu:$GPUS                             # NOTE: you need a GPU for CUDA support; self-explanatory, set to your preference 
 #SBATCH --nodes=1
 #SBATCH --qos=$QOS                                   # for 'high' and 'deadline' QoS, refer to https://support.vectorinstitute.ai/AboutVaughan2
+#SBATCH --exclude=gpu[179,176,165,126,127,180]
 
 # link /checkpoint to current folder
 # ln -sfn /checkpoint/\$USER/\$SLURM_JOB_ID $LOG_DIR
@@ -67,5 +68,5 @@ python $PY_FILE $PY_ARGS >> $LOG_FILE                # the script above, with it
 sbatch run-${SLRM_NAME}.slrm
 
 # delete it
-sleep 3
+sleep 1
 rm -f run-${SLRM_NAME}.slrm

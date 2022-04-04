@@ -8,8 +8,8 @@ from scipy.optimize import linear_sum_assignment
 from multi_part_assembly.utils import qtransform, chamfer_distance
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, rot_l2_loss, rot_cosine_loss
+    shape_cd_loss, calc_part_acc, calc_connectivity_acc, trans_metrics, \
+    rot_metrics, rot_l2_loss, rot_cosine_loss, rot_points_l2_loss
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -236,6 +236,10 @@ class BaseModel(pl.LightningModule):
             elif self.cfg.loss.rot_loss == 'cosine':
                 rot_loss = rot_cosine_loss(pred_quat, new_quat, valids)
             loss_dict['rot_loss'] = rot_loss
+        # TODO: per-point l2 loss on rotated part point clouds
+        if self.cfg.loss.use_rot_pt_l2_loss:
+            loss_dict['rot_pt_l2_loss'] = rot_points_l2_loss(
+                part_pcs, pred_quat, new_quat, valids)
 
         # some specific evaluation metrics calculated in eval
         if not self.training:

@@ -34,6 +34,8 @@ _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
 _C.loss.rot_loss = ''  # regression loss on quat, one of ['l2', 'cosine']
 _C.loss.rot_loss_w = 1.
+_C.loss.use_rot_pt_l2_loss = False  # per-point l2 loss between rotated points
+_C.loss.rot_pt_l2_loss_w = 1.
 
 # Data related
 _C.data = CN()
