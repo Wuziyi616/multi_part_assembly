@@ -3,13 +3,18 @@ import sys
 import copy
 import argparse
 import importlib
-import numpy as np
 
+import trimesh
+import numpy as np
+import open3d as o3d
+
+import torch
 import pytorch_lightning as pl
 
 from multi_part_assembly.datasets import build_dataloader
 from multi_part_assembly.models import build_model
-from multi_part_assembly.utils import pickle_dump
+from multi_part_assembly.utils import trans_rmat_to_pmat, trans_quat_to_pmat, \
+    quaternion_to_rmat
 
 
 def test(cfg):
@@ -67,34 +72,84 @@ def test(cfg):
     print('Done testing...')
 
 
+@torch.no_grad()
 def visualize(cfg):
     # Initialize model
     model = build_model(cfg).cuda()
 
     # Initialize dataloaders
     _, val_loader = build_dataloader(cfg)
+    val_dst = val_loader.dataset
 
     # save some predictions for visualization
-    vis_num = args.vis
-    vis_lst = []
+    vis_lst, loss_lst = [], []
     for batch in val_loader:
-        batch = {k: v.to(model.device) for k, v in batch.items()}
-        out_dict = model.sample_assembly(batch, ret_pcs=False)
-        """list of dicts, each dict contains:
-            - data_id: int, index input of dataset.__getitem__
-            - gt_trans/quat: [P, 3/4]
-            - pred_trans/quat: [P, 3/4]
-        """
-        vis_lst += out_dict
-        if len(vis_lst) >= vis_num:
-            break
+        batch = {k: v.float().to(model.device) for k, v in batch.items()}
+        out_dict = model(batch)  # trans/quat: [B, P, 3/4]
+        loss_dict, _ = model._calc_loss(out_dict, batch)  # each loss is [B]
+        # TODO: the criterion to select examples
+        loss = loss_dict['trans_mae'] + loss_dict['rot_mae'] / 1000.
+        out_dict = {
+            'data_id': batch['data_id'].long(),
+            'pred_trans': out_dict['trans'],
+            'pred_quat': out_dict['quat'],
+            'gt_trans': batch['part_trans'],
+            'gt_quat': batch['part_quat'],
+            'part_valids': batch['part_valids'].long(),
+        }
+        out_dict = {k: v.cpu().numpy() for k, v in out_dict.items()}
+        out_dict_lst = [{k: v[i]
+                         for k, v in out_dict.items()}
+                        for i in range(loss.shape[0])]
+        vis_lst += out_dict_lst
+        loss_lst.append(loss.cpu().numpy())
+    loss_lst = np.concatenate(loss_lst, axis=0)
+    top_idx = np.argsort(loss_lst)[:args.vis]
 
-    # save results
-    save_dir = os.path.dirname(cfg.exp.weight_file)
-    save_name = os.path.join(save_dir, 'vis.pkl')
-    pickle_dump(vis_lst, save_name)
+    # apply the predicted transforms to the original meshes and save them
+    save_dir = os.path.join(
+        os.path.dirname(cfg.exp.weight_file), 'vis', args.category)
+    for idx in top_idx:
+        out_dict = vis_lst[idx]
+        data_id = out_dict['data_id']
+        mesh_dir = os.path.join(val_dst.data_dir, val_dst.data_list[data_id])
+        mesh_files = os.listdir(mesh_dir)
+        mesh_files.sort()
+        assert len(mesh_files) == out_dict['part_valids'].sum()
+        cur_save_dir = os.path.join(save_dir, os.path.basename(mesh_dir))
+        os.makedirs(cur_save_dir, exist_ok=True)
+        for i, mesh_file in enumerate(mesh_files):
+            mesh = trimesh.load(os.path.join(mesh_dir, mesh_file))
+            gt_trans, gt_quat = \
+                out_dict['gt_trans'][i], out_dict['gt_trans'][i]
+            # R^T (mesh - T) --> init_mesh
+            gt_rmat = quaternion_to_rmat(gt_quat)
+            init_trans = -(gt_rmat.T @ gt_trans)
+            init_rmat = gt_rmat.T
+            init_pmat = trans_rmat_to_pmat(init_trans, init_rmat)
+            init_mesh = mesh.apply_transform(init_pmat)
+            # predicted pose
+            pred_trans, pred_quat = \
+                out_dict['pred_trans'][i], out_dict['pred_trans'][i]
+            pred_pmat = trans_quat_to_pmat(pred_trans, pred_quat)
+            pred_mesh = init_mesh.apply_transform(pred_pmat)
+            # sample point clouds
+            init_pc = trimesh.sample.sample_surface(init_mesh,
+                                                    val_dst.num_points)[0]
+            pred_pc = trimesh.sample.sample_surface(pred_mesh,
+                                                    val_dst.num_points)[0]
+            # save
+            mesh.export(os.path.join(cur_save_dir, mesh_file))
+            init_mesh.export(os.path.join(cur_save_dir, f'input_{mesh_file}'))
+            pred_mesh.export(os.path.join(cur_save_dir, f'pred_{mesh_file}'))
+            o3d.io.write_point_cloud(
+                os.path.join(cur_save_dir, f'input_{mesh_file[:-4]}.ply'),
+                init_pc)
+            o3d.io.write_point_cloud(
+                os.path.join(cur_save_dir, f'pred_{mesh_file[:-4]}.ply'),
+                pred_pc)
 
-    print(f'Saving {vis_num} predictions for visualization...')
+    print(f'Saving {args.vis} predictions for visualization...')
 
 
 if __name__ == '__main__':
@@ -131,6 +186,8 @@ if __name__ == '__main__':
     print(cfg)
 
     if args.vis > 0:
+        if not args.category:
+            args.category = 'all'
         visualize(cfg)
     else:
         test(cfg)

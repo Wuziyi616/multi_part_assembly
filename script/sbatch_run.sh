@@ -44,7 +44,7 @@ echo "#!/bin/bash
 #SBATCH --gres=gpu:$GPUS                             # NOTE: you need a GPU for CUDA support; self-explanatory, set to your preference 
 #SBATCH --nodes=1
 #SBATCH --qos=$QOS                                   # for 'high' and 'deadline' QoS, refer to https://support.vectorinstitute.ai/AboutVaughan2
-#SBATCH --exclude=gpu[179,176,165,126,127,180]
+#SBATCH --exclude=gpu[179,176,165,126,127,180,080]
 
 # link /checkpoint to current folder
 # ln -sfn /checkpoint/\$USER/\$SLURM_JOB_ID $LOG_DIR

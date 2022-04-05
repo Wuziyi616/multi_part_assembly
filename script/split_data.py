@@ -13,7 +13,10 @@ with open(args.info_file, 'r') as f:
 all_cat = np.unique([line.split('/')[args.cat_loc] for line in all_path])
 print(f'{all_cat}\n{len(all_cat)} categories detected!')
 
-cat2path = {cat: [path for path in all_path if cat in path] for cat in all_cat}
+cat2path = {
+    cat: [path for path in all_path if cat == path.split('/')[args.cat_loc]]
+    for cat in all_cat
+}
 train_paths, val_paths = [], []
 for cat, paths in cat2path.items():
     np.random.shuffle(paths)

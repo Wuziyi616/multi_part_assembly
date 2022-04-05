@@ -32,19 +32,32 @@ _C.model.noise_dim = 32  # stochastic PoseRegressor
 # CD of transformed whole shapes
 _C.loss = CN()
 _C.loss.sample_iter = 5  # MoN loss sampling
-# the best loss settings for baseline after some ablation
+# the best loss setting on PartNet dataset after some ablation
 #   - translation l2 with weight = 1
 #   - rotated part points chamfer with weight = 10
 #   - transformed whole shape points chamfer with weight = 10
 #   - not using direct loss on rotation angle, l2 loss on rotated points
 #       because there is no clear point correspondence here given the symmetry
 #       of parts, and many parts are extremely similar to each other
+# the best loss setting on Geometry dataset after some ablation
+#   - translation l2 with weight = 1
+#   - rotation cosine with weight = 0.2
+#   - rotated part points per-point l2 with weight = 1
+#   - rotated part points chamfer with weight = 10
+#   - transformed whole shape points chamfer with weight = 10
+#   - it turns out that rotation is VERY hard to learn in this dataset
+#       we can achieve best PA and SCD using the same setting as PartNet
+#       however, this will result in very bad rotation angle error (~90 deg)
+#       so we apply l2 loss on rotation directly
+#       also note that there is almost no symmetry in this dataset
 _C.loss.trans_loss_w = 1.
 _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
-_C.loss.rot_loss = ''  # regression loss on quat, one of ['l2', 'cosine']
-_C.loss.rot_loss_w = 1.
-_C.loss.use_rot_pt_l2_loss = False  # per-point l2 loss between rotated points
+# cosine regression loss on quat
+_C.loss.use_rot_loss = False
+_C.loss.rot_loss_w = 0.2
+# per-point l2 loss between rotated part point clouds
+_C.loss.use_rot_pt_l2_loss = False
 _C.loss.rot_pt_l2_loss_w = 1.
 
 # Data related

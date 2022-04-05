@@ -32,9 +32,11 @@ _C.loss.sample_iter = 5  # MoN loss sampling
 _C.loss.trans_loss_w = 1.
 _C.loss.rot_pt_cd_loss_w = 10.
 _C.loss.transform_pt_cd_loss_w = 10.
-_C.loss.rot_loss = ''  # regression loss on quat, one of ['l2', 'cosine']
-_C.loss.rot_loss_w = 1.
-_C.loss.use_rot_pt_l2_loss = False  # per-point l2 loss between rotated points
+# cosine regression loss on quat
+_C.loss.use_rot_loss = False
+_C.loss.rot_loss_w = 0.2
+# per-point l2 loss between rotated part point clouds
+_C.loss.use_rot_pt_l2_loss = False
 _C.loss.rot_pt_l2_loss_w = 1.
 
 # Data related

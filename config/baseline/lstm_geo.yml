@@ -16,15 +16,15 @@ loss:
     trans_loss_w: 1.
     rot_pt_cd_loss_w: 10.
     transform_pt_cd_loss_w: 10.
-    rot_loss: ""
-    rot_loss_w: 1.
-    use_rot_pt_l2_loss: False
+    use_rot_loss: True
+    rot_loss_w: 0.2
+    use_rot_pt_l2_loss: True
     rot_pt_l2_loss_w: 1.
 
 data:
     dataset: "geometry"
     data_dir: "/scratch/ssd004/scratch/ziyiwu/data/assembly"
-    data_fn: "semantic_data.{}.txt"
+    data_fn: "semantic_data_filtered.{}.txt"
     data_keys: ('part_ids', 'instance_label')
     category: ""
 

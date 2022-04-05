@@ -46,7 +46,8 @@ class GeometryPartDataset(Dataset):
         data_list = []
         for mesh in mesh_list:
             for frac in os.listdir(os.path.join(self.data_dir, mesh)):
-                if 'fractured' not in frac:
+                # we take both fractures and modes for training
+                if 'fractured' not in frac and 'mode' not in frac:
                     continue
                 frac = os.path.join(mesh, frac)
                 num_parts = len(os.listdir(os.path.join(self.data_dir, frac)))

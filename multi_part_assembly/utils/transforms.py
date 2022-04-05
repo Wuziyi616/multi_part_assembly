@@ -13,6 +13,7 @@ Transformation functions. Adopted from:
 
 import copy
 from functools import reduce
+from scipy.spatial.transform import Rotation as R
 
 import torch
 import numpy as np
@@ -281,6 +282,28 @@ def euler_to_quaternion(e, order):
         result *= -1
 
     return result.reshape(original_shape)
+
+
+def quaternion_to_rmat(quat):
+    """quat: [4], (w, i, j, k)"""
+    rmat = R.from_quat(quat[[1, 2, 3, 0]]).as_matrix()
+    return rmat
+
+
+def trans_rmat_to_pmat(trans, rmat):
+    """Convert translation and rotation matrix to homogeneout matrix."""
+    pose_mat = np.eye(4)
+    pose_mat[:3, :3] = rmat
+    pose_mat[:3, -1] = trans
+    return pose_mat
+
+
+def trans_quat_to_pmat(trans, quat):
+    """Convert translation and quaternion to homogeneous matrix."""
+    # trans: [3]; quat: [4], (w, i, j, k)
+    rmat = quaternion_to_rmat(quat)
+    pose_mat = trans_rmat_to_pmat(trans, rmat)
+    return pose_mat
 
 
 def get_sym_point(point, x, y, z):
