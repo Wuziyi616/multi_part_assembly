@@ -1,6 +1,7 @@
 import copy
 import pickle
 import numpy as np
+import open3d as o3d
 
 import torch.nn as nn
 from torch.nn import LayerNorm, GroupNorm
@@ -30,6 +31,18 @@ def pickle_dump(obj, file=None, **kwargs):
         pickle.dump(obj, file, **kwargs)
     else:
         raise TypeError('"file" must be a filename str or a file-object')
+
+
+def save_pc(pc, file):
+    """Save point cloud to file.
+
+    Args:
+        pc (np.ndarray): [N, 3]
+        file (str)
+    """
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc)
+    o3d.io.write_point_cloud(file, pcd)
 
 
 def colorize_part_pc(part_pc, colors):

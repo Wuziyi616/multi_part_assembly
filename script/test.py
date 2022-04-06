@@ -6,7 +6,7 @@ import importlib
 
 import trimesh
 import numpy as np
-import open3d as o3d
+from tqdm import tqdm
 
 import torch
 import pytorch_lightning as pl
@@ -14,7 +14,7 @@ import pytorch_lightning as pl
 from multi_part_assembly.datasets import build_dataloader
 from multi_part_assembly.models import build_model
 from multi_part_assembly.utils import trans_rmat_to_pmat, trans_quat_to_pmat, \
-    quaternion_to_rmat
+    quaternion_to_rmat, save_pc
 
 
 def test(cfg):
@@ -75,7 +75,7 @@ def test(cfg):
 @torch.no_grad()
 def visualize(cfg):
     # Initialize model
-    model = build_model(cfg).cuda()
+    model = build_model(cfg).cuda().eval()
 
     # Initialize dataloaders
     _, val_loader = build_dataloader(cfg)
@@ -83,7 +83,7 @@ def visualize(cfg):
 
     # save some predictions for visualization
     vis_lst, loss_lst = [], []
-    for batch in val_loader:
+    for batch in tqdm(val_loader):
         batch = {k: v.float().to(model.device) for k, v in batch.items()}
         out_dict = model(batch)  # trans/quat: [B, P, 3/4]
         loss_dict, _ = model._calc_loss(out_dict, batch)  # each loss is [B]
@@ -116,38 +116,36 @@ def visualize(cfg):
         mesh_files = os.listdir(mesh_dir)
         mesh_files.sort()
         assert len(mesh_files) == out_dict['part_valids'].sum()
-        cur_save_dir = os.path.join(save_dir, os.path.basename(mesh_dir))
+        cur_save_dir = os.path.join(save_dir,
+                                    mesh_dir.split('/')[-2],
+                                    mesh_dir.split('/')[-1])
         os.makedirs(cur_save_dir, exist_ok=True)
         for i, mesh_file in enumerate(mesh_files):
             mesh = trimesh.load(os.path.join(mesh_dir, mesh_file))
-            gt_trans, gt_quat = \
-                out_dict['gt_trans'][i], out_dict['gt_trans'][i]
+            mesh.export(os.path.join(cur_save_dir, mesh_file))
             # R^T (mesh - T) --> init_mesh
+            gt_trans, gt_quat = \
+                out_dict['gt_trans'][i], out_dict['gt_quat'][i]
             gt_rmat = quaternion_to_rmat(gt_quat)
             init_trans = -(gt_rmat.T @ gt_trans)
             init_rmat = gt_rmat.T
             init_pmat = trans_rmat_to_pmat(init_trans, init_rmat)
             init_mesh = mesh.apply_transform(init_pmat)
-            # predicted pose
-            pred_trans, pred_quat = \
-                out_dict['pred_trans'][i], out_dict['pred_trans'][i]
-            pred_pmat = trans_quat_to_pmat(pred_trans, pred_quat)
-            pred_mesh = init_mesh.apply_transform(pred_pmat)
-            # sample point clouds
+            init_mesh.export(os.path.join(cur_save_dir, f'input_{mesh_file}'))
             init_pc = trimesh.sample.sample_surface(init_mesh,
                                                     val_dst.num_points)[0]
+            save_pc(init_pc,
+                    os.path.join(cur_save_dir, f'input_{mesh_file[:-4]}.ply'))
+            # predicted pose
+            pred_trans, pred_quat = \
+                out_dict['pred_trans'][i], out_dict['pred_quat'][i]
+            pred_pmat = trans_quat_to_pmat(pred_trans, pred_quat)
+            pred_mesh = init_mesh.apply_transform(pred_pmat)
+            pred_mesh.export(os.path.join(cur_save_dir, f'pred_{mesh_file}'))
             pred_pc = trimesh.sample.sample_surface(pred_mesh,
                                                     val_dst.num_points)[0]
-            # save
-            mesh.export(os.path.join(cur_save_dir, mesh_file))
-            init_mesh.export(os.path.join(cur_save_dir, f'input_{mesh_file}'))
-            pred_mesh.export(os.path.join(cur_save_dir, f'pred_{mesh_file}'))
-            o3d.io.write_point_cloud(
-                os.path.join(cur_save_dir, f'input_{mesh_file[:-4]}.ply'),
-                init_pc)
-            o3d.io.write_point_cloud(
-                os.path.join(cur_save_dir, f'pred_{mesh_file[:-4]}.ply'),
-                pred_pc)
+            save_pc(pred_pc,
+                    os.path.join(cur_save_dir, f'pred_{mesh_file[:-4]}.ply'))
 
     print(f'Saving {args.vis} predictions for visualization...')
 
