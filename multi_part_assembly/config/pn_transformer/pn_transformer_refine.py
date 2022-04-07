@@ -56,6 +56,7 @@ _C.data.category = ''  # useful in geometry dataset
 _C.data.num_pc_points = 1000  # points per part
 _C.data.min_num_part = 2
 _C.data.max_num_part = 20
+_C.data.rot_range = -1.  # rotation range for geometric assembly dataset
 _C.data.overfit = -1
 _C.data.colors = [
     [0, 204, 0],

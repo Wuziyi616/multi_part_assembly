@@ -27,6 +27,7 @@ data:
     data_fn: "semantic_data_filtered.{}.txt"
     data_keys: ('part_ids', 'instance_label', 'valid_matrix')
     category: ""
+    rot_range: -1.
 
 optimizer:
     lr: 1e-3

@@ -20,14 +20,16 @@ class GeometryPartDataset(Dataset):
         num_points=1000,
         min_num_part=2,
         max_num_part=20,
+        rot_range=-1,
         overfit=-1,
     ):
         # store parameters
         self.category = category if category != 'all' else ''
         self.data_dir = data_dir
+        self.num_points = num_points
         self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
-        self.num_points = num_points
+        self.rot_range = rot_range  # rotation range in degree
 
         # list of fracture folder path
         self.data_list = self._read_data(data_fn)
@@ -63,10 +65,13 @@ class GeometryPartDataset(Dataset):
         pc = pc - centroid[None]
         return pc, centroid
 
-    @staticmethod
-    def _rotate_pc(pc):
+    def _rotate_pc(self, pc):
         """pc: [N, 3]"""
-        rot_mat = R.random().as_matrix()
+        if self.rot_range > 0.:
+            rot_euler = (np.random.rand(3) - 0.5) * 2. * self.rot_range
+            rot_mat = R.from_euler('xyz', rot_euler, degrees=True).as_matrix()
+        else:
+            rot_mat = R.random().as_matrix()
         pc = (rot_mat @ pc.T).T
         quat_gt = R.from_matrix(rot_mat.T).as_quat()
         # we use scalar-first quaternion
@@ -194,6 +199,7 @@ def build_geometry_dataloader(cfg):
         num_points=cfg.data.num_pc_points,
         min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
+        rot_range=cfg.data.rot_range,
         overfit=cfg.data.overfit,
     )
     train_loader = DataLoader(
@@ -214,6 +220,7 @@ def build_geometry_dataloader(cfg):
         num_points=cfg.data.num_pc_points,
         min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
+        rot_range=cfg.data.rot_range,
         overfit=cfg.data.overfit,
     )
     val_loader = DataLoader(
