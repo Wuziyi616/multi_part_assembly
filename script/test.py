@@ -6,18 +6,17 @@ import importlib
 
 import numpy as np
 
+import torch
 import pytorch_lightning as pl
 
 from multi_part_assembly.datasets import build_dataloader
 from multi_part_assembly.models import build_model
 
 
+@torch.no_grad()
 def test(cfg):
     # Initialize model
     model = build_model(cfg)
-
-    # Initialize dataloaders
-    _, val_loader = build_dataloader(cfg)
 
     all_gpus = list(cfg.exp.gpus)
     trainer = pl.Trainer(
@@ -26,10 +25,11 @@ def test(cfg):
         strategy='dp' if len(all_gpus) > 1 else None,
     )
 
-    trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
-
     if args.category != 'all':
+        _, val_loader = build_dataloader(cfg)
+        trainer.test(model, val_loader, ckpt_path=cfg.exp.weight_file)
         return
+
     # if `args.category` is 'all', we also compute per-category results
     # TODO: currently we hard-code to support Breaking Bad dataset
     all_category = [

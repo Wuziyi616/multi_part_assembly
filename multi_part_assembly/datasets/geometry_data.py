@@ -43,7 +43,8 @@ class GeometryPartDataset(Dataset):
         """Filter out invalid number of parts."""
         with open(os.path.join(self.data_dir, data_fn), 'r') as f:
             mesh_list = [
-                line.strip() for line in f.readlines() if self.category in line
+                line.strip() for line in f.readlines()
+                if self.category in line.split('/')
             ]
         data_list = []
         for mesh in mesh_list:
@@ -53,9 +54,8 @@ class GeometryPartDataset(Dataset):
                     continue
                 frac = os.path.join(mesh, frac)
                 num_parts = len(os.listdir(os.path.join(self.data_dir, frac)))
-                if not self.min_num_part <= num_parts <= self.max_num_part:
-                    continue
-                data_list.append(frac)
+                if self.min_num_part <= num_parts <= self.max_num_part:
+                    data_list.append(frac)
         return data_list
 
     @staticmethod

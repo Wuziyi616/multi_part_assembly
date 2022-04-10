@@ -21,7 +21,8 @@ from multi_part_assembly.utils import trans_rmat_to_pmat, trans_quat_to_pmat, \
 def visualize(cfg):
     # Initialize model
     model = build_model(cfg)
-    model = model.load_from_checkpoint(cfg.exp.weight_file, map_location='cpu')
+    ckp = torch.load(cfg.exp.weight_file, map_location='cpu')
+    model.load_state_dict(ckp['state_dict'])
     model = nn.DataParallel(model).cuda().eval()
 
     # Initialize dataloaders
@@ -31,7 +32,7 @@ def visualize(cfg):
     # save some predictions for visualization
     vis_lst, loss_lst = [], []
     for batch in tqdm(val_loader):
-        batch = {k: v.float().to(model.device) for k, v in batch.items()}
+        batch = {k: v.float().cuda() for k, v in batch.items()}
         out_dict = model(batch)  # trans/quat: [B, P, 3/4]
         loss_dict, _ = model.module._calc_loss(out_dict, batch)  # loss is [B]
         # TODO: the criterion to select examples
@@ -65,9 +66,10 @@ def visualize(cfg):
         mesh_files = os.listdir(mesh_dir)
         mesh_files.sort()
         assert len(mesh_files) == out_dict['part_valids'].sum()
+        subfolder_name = f"rank{rank}-{len(mesh_files)}pcs-"\
+                         f"{mesh_dir.split('/')[-1]}"
         cur_save_dir = os.path.join(save_dir,
-                                    mesh_dir.split('/')[-2],
-                                    f"{rank}-{mesh_dir.split('/')[-1]}")
+                                    mesh_dir.split('/')[-2], subfolder_name)
         os.makedirs(cur_save_dir, exist_ok=True)
         for i, mesh_file in enumerate(mesh_files):
             mesh = trimesh.load(os.path.join(mesh_dir, mesh_file))
@@ -96,7 +98,7 @@ def visualize(cfg):
             save_pc(pred_pc,
                     os.path.join(cur_save_dir, f'pred_{mesh_file[:-4]}.ply'))
 
-    print(f'Saving {args.vis} predictions for visualization...')
+    print(f'Saving {len(top_idx)} predictions for visualization...')
 
 
 if __name__ == '__main__':

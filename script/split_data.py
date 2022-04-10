@@ -1,3 +1,5 @@
+"""Split a txt data info file into train/val sets."""
+
 import argparse
 import numpy as np
 
