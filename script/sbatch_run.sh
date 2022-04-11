@@ -6,7 +6,8 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=6 QOS=normal ./script/sbatch_run.sh rtx6000 train-sbatch ./script/train.py --params params.py
+#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal ./script/sbatch_run.sh rtx6000 train-sbatch \
+#       ./script/train.py --cfg_file config.py
 #######################################################################
 
 # read args from command line

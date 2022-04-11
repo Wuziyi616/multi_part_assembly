@@ -38,7 +38,8 @@ def visualize(cfg):
         # TODO: the criterion to select examples
         # loss = -loss_dict['part_acc']
         # loss = loss_dict['trans_mae'] + loss_dict['rot_mae'] / 1000.
-        loss = loss_dict['rot_pt_l2_loss']
+        # loss = loss_dict['transform_pt_cd_loss']
+        loss = loss_dict['rot_pt_l2_loss'] + loss_dict['trans_mae']
         out_dict = {
             'data_id': batch['data_id'].long(),
             'pred_trans': out_dict['trans'],
@@ -104,7 +105,6 @@ def visualize(cfg):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
-    parser.add_argument('--yml_file', required=True, type=str, help='.yml')
     parser.add_argument('--category', type=str, default='', help='data subset')
     parser.add_argument('--min_num_part', type=int, default=-1)
     parser.add_argument('--max_num_part', type=int, default=-1)
@@ -115,7 +115,6 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(args.cfg_file))
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
-    cfg.merge_from_file(args.yml_file)
 
     if args.category:
         cfg.data.category = args.category

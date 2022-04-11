@@ -23,7 +23,7 @@ def main(cfg):
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
     exp_name = cfg.model.name
-    cfg_name = os.path.basename(args.yml_file)[:-4]  # remove '.yml'
+    cfg_name = os.path.basename(args.cfg_file)[:-3]  # remove '.py'
     ckp_dir = os.path.join(cfg.exp.ckp_dir, exp_name, cfg_name, 'models')
     os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)
 
@@ -97,7 +97,6 @@ def main(cfg):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
-    parser.add_argument('--yml_file', required=True, type=str, help='.yml')
     parser.add_argument('--category', type=str, default='', help='data subset')
     parser.add_argument('--gpus', nargs='+', default=[0], type=int)
     parser.add_argument('--weight', type=str, default='', help='load weight')
@@ -108,7 +107,6 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(args.cfg_file))
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
-    cfg.merge_from_file(args.yml_file)
 
     cfg.exp.gpus = args.gpus
     if args.category:

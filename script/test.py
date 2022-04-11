@@ -71,7 +71,6 @@ def test(cfg):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
-    parser.add_argument('--yml_file', required=True, type=str, help='.yml')
     parser.add_argument('--category', type=str, default='', help='data subset')
     parser.add_argument('--min_num_part', type=int, default=-1)
     parser.add_argument('--max_num_part', type=int, default=-1)
@@ -82,7 +81,6 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(args.cfg_file))
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
-    cfg.merge_from_file(args.yml_file)
 
     cfg.exp.gpus = args.gpus
     if args.category:
