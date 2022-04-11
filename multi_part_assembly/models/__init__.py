@@ -7,17 +7,17 @@ from .dgl import DGLModel
 
 
 def build_model(cfg):
-    if cfg.exp.name == 'global':
+    if cfg.model.name == 'global':
         return GlobalModel(cfg)
-    elif cfg.exp.name == 'lstm':
+    elif cfg.model.name == 'lstm':
         return LSTMModel(cfg)
-    elif cfg.exp.name == 'dgl':
+    elif cfg.model.name == 'dgl':
         return DGLModel(cfg)
-    elif cfg.exp.name == 'pn_transformer':
+    elif cfg.model.name == 'pn_transformer':
         return PNTransformer(cfg)
-    elif cfg.exp.name == 'pn_transformer_gan':
+    elif cfg.model.name == 'pn_transformer_gan':
         return PNTransformerGAN(cfg)
-    elif cfg.exp.name == 'pn_transformer_refine':
+    elif cfg.model.name == 'pn_transformer_refine':
         return PNTransformerRefine(cfg)
     else:
-        raise NotImplementedError(f'Model {cfg.exp.name} not supported!')
+        raise NotImplementedError(f'Model {cfg.model.name} not supported!')

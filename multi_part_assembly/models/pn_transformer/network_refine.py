@@ -67,7 +67,7 @@ class PNTransformerRefine(PNTransformer):
             dim += self.pc_feat_dim
         pose_predictor = StocasticPoseRegressor(
             feat_dim=dim,
-            noise_dim=self.cfg.model.noise_dim,
+            noise_dim=self.cfg.loss.noise_dim,
         )
         pose_predictors = _get_clones(pose_predictor, self.refine_steps)
         return pose_predictors

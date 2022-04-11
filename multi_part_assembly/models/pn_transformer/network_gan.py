@@ -190,29 +190,31 @@ class PNTransformerGAN(PNTransformer):
             lr=g_lr)
         d_opt = optim.Adam(self.discriminator.parameters(), lr=d_lr)
 
-        clip_lr = min(g_lr, d_lr) / 10.  # this is a bit hack
-        total_epochs = self.cfg.exp.num_epochs
-        warmup_epochs = int(total_epochs * self.cfg.optimizer.warmup_ratio)
-        g_scheduler = CosineAnnealingWarmupRestarts(
-            g_opt,
-            total_epochs,
-            max_lr=g_lr,
-            min_lr=clip_lr,
-            warmup_steps=warmup_epochs)
-        d_scheduler = CosineAnnealingWarmupRestarts(
-            d_opt,
-            total_epochs,
-            max_lr=d_lr,
-            min_lr=clip_lr,
-            warmup_steps=warmup_epochs)
-
-        return (
-            [g_opt, d_opt],
-            [{
-                'scheduler': g_scheduler,
-                'interval': 'epoch',
-            }, {
-                'scheduler': d_scheduler,
-                'interval': 'epoch',
-            }],
-        )
+        if self.cfg.optimizer.lr_scheduler:
+            assert self.cfg.optimizer.lr_scheduler in ['cosine']
+            clip_lr = min(g_lr, d_lr) / self.cfg.optimizer.lr_decay_factor
+            total_epochs = self.cfg.exp.num_epochs
+            warmup_epochs = int(total_epochs * self.cfg.optimizer.warmup_ratio)
+            g_scheduler = CosineAnnealingWarmupRestarts(
+                g_opt,
+                total_epochs,
+                max_lr=g_lr,
+                min_lr=clip_lr,
+                warmup_steps=warmup_epochs)
+            d_scheduler = CosineAnnealingWarmupRestarts(
+                d_opt,
+                total_epochs,
+                max_lr=d_lr,
+                min_lr=clip_lr,
+                warmup_steps=warmup_epochs)
+            return (
+                [g_opt, d_opt],
+                [{
+                    'scheduler': g_scheduler,
+                    'interval': 'epoch',
+                }, {
+                    'scheduler': d_scheduler,
+                    'interval': 'epoch',
+                }],
+            )
+        return [g_opt, d_opt]

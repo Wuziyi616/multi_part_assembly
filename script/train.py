@@ -4,7 +4,6 @@ import pwd
 import argparse
 import importlib
 
-import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -23,7 +22,7 @@ def main(cfg):
 
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
-    exp_name = cfg.exp.name
+    exp_name = cfg.model.name
     cfg_name = os.path.basename(args.yml_file)[:-4]  # remove '.yml'
     ckp_dir = os.path.join(cfg.exp.ckp_dir, exp_name, cfg_name, 'models')
     os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)

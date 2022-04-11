@@ -64,7 +64,7 @@ class DGLModel(BaseModel):
             feat_dim += self.max_num_part
         pose_predictor = StocasticPoseRegressor(
             feat_dim=feat_dim,
-            noise_dim=self.cfg.model.noise_dim,
+            noise_dim=self.cfg.loss.noise_dim,
         )
         pose_predictors = _get_clones(pose_predictor, self.iter)
         return pose_predictors

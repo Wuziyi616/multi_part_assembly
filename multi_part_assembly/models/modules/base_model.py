@@ -330,22 +330,25 @@ class BaseModel(pl.LightningModule):
         else:
             optimizer = optim.Adam(self.parameters(), lr=lr, weight_decay=0.)
 
-        total_epochs = self.cfg.exp.num_epochs
-        warmup_epochs = int(total_epochs * self.cfg.optimizer.warmup_ratio)
-        scheduler = CosineAnnealingWarmupRestarts(
-            optimizer,
-            total_epochs,
-            max_lr=lr,
-            min_lr=lr / 100.,
-            warmup_steps=warmup_epochs)
-
-        return (
-            [optimizer],
-            [{
-                'scheduler': scheduler,
-                'interval': 'epoch',
-            }],
-        )
+        if self.cfg.optimizer.lr_scheduler:
+            assert self.cfg.optimizer.lr_scheduler in ['cosine']
+            total_epochs = self.cfg.exp.num_epochs
+            warmup_epochs = int(total_epochs * self.cfg.optimizer.warmup_ratio)
+            scheduler = CosineAnnealingWarmupRestarts(
+                optimizer,
+                total_epochs,
+                max_lr=lr,
+                min_lr=lr / self.cfg.optimizer.lr_decay_factor,
+                warmup_steps=warmup_epochs,
+            )
+            return (
+                [optimizer],
+                [{
+                    'scheduler': scheduler,
+                    'interval': 'epoch',
+                }],
+            )
+        return optimizer
 
     @torch.no_grad()
     def sample_assembly(self, data_dict):

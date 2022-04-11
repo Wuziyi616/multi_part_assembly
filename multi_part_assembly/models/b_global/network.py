@@ -34,7 +34,7 @@ class GlobalModel(BaseModel):
             self.semantic else self.pc_feat_dim * 2
         pose_predictor = StocasticPoseRegressor(
             feat_dim=feat_dim,
-            noise_dim=self.cfg.model.noise_dim,
+            noise_dim=self.cfg.loss.noise_dim,
         )
         return pose_predictor
 
