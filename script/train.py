@@ -34,6 +34,7 @@ def main(cfg):
         os.system(r'ln -s /checkpoint/{}/{}/ {}'.format(
             usr, SLURM_JOB_ID, ckp_dir))
 
+    # configure callbacks
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckp_dir,
         filename='model-{epoch:03d}',
@@ -41,10 +42,15 @@ def main(cfg):
         save_top_k=5,
         mode='max',
     )
-
+    callbacks = [
+        LearningRateMonitor('epoch'),
+        checkpoint_callback,
+    ]
     # visualize assembly results
-    assembly_callback = PCAssemblyLogCallback(cfg.exp.val_sample_vis,
-                                              train_loader, val_loader)
+    if args.vis:
+        assembly_callback = PCAssemblyLogCallback(cfg.exp.val_sample_vis,
+                                                  train_loader, val_loader)
+        callbacks.append(assembly_callback)
 
     logger_name = f'{exp_name}-{cfg_name}-{SLURM_JOB_ID}'
     logger = WandbLogger(
@@ -59,19 +65,14 @@ def main(cfg):
         # strategy='ddp' if len(all_gpus) > 1 else None,
         strategy='dp' if len(all_gpus) > 1 else None,
         max_epochs=cfg.exp.num_epochs,
-        callbacks=[
-            LearningRateMonitor('epoch'),
-            checkpoint_callback,
-            # TODO: uncomment this if you want to visualize assembly results
-            # assembly_callback,
-        ],
+        callbacks=callbacks,
         precision=16 if args.fp16 else 32,  # FP16 training
         benchmark=args.cudnn,  # cudnn benchmark
         gradient_clip_val=cfg.optimizer.clip_grad,  # clip grad norm
         check_val_every_n_epoch=cfg.exp.val_every,
         log_every_n_steps=50,
         profiler='simple',  # training time bottleneck analysis
-        # detect_anomaly=True,
+        # detect_anomaly=True,  # for debug
     )
 
     # automatically detect existing checkpoints in case of preemption
@@ -102,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight', type=str, default='', help='load weight')
     parser.add_argument('--fp16', action='store_true', help='FP16 training')
     parser.add_argument('--cudnn', action='store_true', help='cudnn benchmark')
+    parser.add_argument('--vis', action='store_true', help='visualize results')
     args = parser.parse_args()
 
     sys.path.append(os.path.dirname(args.cfg_file))

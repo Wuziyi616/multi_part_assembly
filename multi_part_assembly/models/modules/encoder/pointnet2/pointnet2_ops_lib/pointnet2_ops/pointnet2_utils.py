@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import warnings
 from torch.autograd import Function
+from torch.cuda.amp import custom_fwd, custom_bwd
 from typing import *
 
 try:
@@ -33,6 +34,7 @@ except ImportError:
 
 class FurthestPointSampling(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, xyz, npoint):
         # type: (Any, torch.Tensor, int) -> torch.Tensor
         r"""
@@ -58,6 +60,7 @@ class FurthestPointSampling(Function):
         return out
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         return ()
 
@@ -67,6 +70,7 @@ furthest_point_sample = FurthestPointSampling.apply
 
 class GatherOperation(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -90,6 +94,7 @@ class GatherOperation(Function):
         return _ext.gather_points(features, idx)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         idx, features = ctx.saved_tensors
         N = features.size(2)
@@ -103,6 +108,7 @@ gather_operation = GatherOperation.apply
 
 class ThreeNN(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, unknown, known):
         # type: (Any, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
@@ -129,6 +135,7 @@ class ThreeNN(Function):
         return dist, idx
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_dist, grad_idx):
         return ()
 
@@ -138,6 +145,7 @@ three_nn = ThreeNN.apply
 
 class ThreeInterpolate(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, features, idx, weight):
         # type(Any, torch.Tensor, torch.Tensor, torch.Tensor) -> Torch.Tensor
         r"""
@@ -161,6 +169,7 @@ class ThreeInterpolate(Function):
         return _ext.three_interpolate(features, idx, weight)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         # type: (Any, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         r"""
@@ -193,6 +202,7 @@ three_interpolate = ThreeInterpolate.apply
 
 class GroupingOperation(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -214,6 +224,7 @@ class GroupingOperation(Function):
         return _ext.group_points(features, idx)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         # type: (Any, torch.tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
@@ -242,6 +253,7 @@ grouping_operation = GroupingOperation.apply
 
 class BallQuery(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, radius, nsample, xyz, new_xyz):
         # type: (Any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -269,6 +281,7 @@ class BallQuery(Function):
         return output
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         return ()
 

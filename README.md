@@ -71,11 +71,26 @@ python script/train.py --cfg_file multi_part_assembly/config/global/global-32x1-
 
 Optional arguments:
 
--   `--category`: train the model only on a subset of data
--   `--gpus`: setting training GPUs
+-   `--category`: train the model only on a subset of data, e.g. `Chair`, `Table`, `Lamp` on PartNet
+-   `--gpus`: setting training GPUs, note that by default we are using DP training. Please modify `script/train.py` to enable DDP training
 -   `--weight`: loading pre-trained weights
 -   `--fp16`: FP16 mixed precision training
 -   `--cudnn`: setting `cudnn.benchmark = True`
+-   `--vis`: visualize assembly results to wandb during training, may take large disk space
+
+### Helper Scripts
+
+Script for configuring and submitting jobs to cluster SLURM system:
+
+```
+GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal ./script/sbatch_run.sh $PARTITION $JOB_NAME ./script/train.py --cfg_file $CFG --other_args...
+```
+
+Script for running a job multiple times:
+
+```
+GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./script/dup_run_sbatch.sh $PARTITION $JOB_NAME ./script/train.py $CFG --other_args...
+```
 
 ## Testing
 

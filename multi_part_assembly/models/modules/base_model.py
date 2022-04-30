@@ -100,8 +100,12 @@ class BaseModel(pl.LightningModule):
         # in training we log for every step
         if mode == 'train':
             log_dict = {f'{mode}/{k}': v.item() for k, v in loss_dict.items()}
+            data_name = [
+                k for k in self.trainer.profiler.recorded_durations.keys()
+                if 'prepare_data' in k
+            ][0]
             log_dict[f'{mode}/data_time'] = \
-                self.trainer.profiler.recorded_durations['get_train_batch'][-1]
+                self.trainer.profiler.recorded_durations[data_name][-1]
             self.log_dict(log_dict, logger=True, sync_dist=False)
 
         return loss_dict
