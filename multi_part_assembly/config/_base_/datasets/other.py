@@ -1,11 +1,11 @@
-"""Artifact subset from the Breaking Bad dataset."""
+"""Other subset from the Breaking Bad dataset."""
 
 from yacs.config import CfgNode as CN
 
 _C = CN()
 _C.dataset = 'geometry'
 _C.data_dir = '/scratch/ssd004/scratch/ziyiwu/data/assembly'
-_C.data_fn = 'artifact.{}.txt'
+_C.data_fn = 'other.{}.txt'
 _C.data_keys = ('part_ids', 'instance_label')
 _C.category = ''  # empty means all categories
 _C.rot_range = -1.  # rotation range for curriculum learning

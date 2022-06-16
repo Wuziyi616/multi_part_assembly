@@ -2,14 +2,33 @@
 
 ## Prerequisite
 
-Install custom CUDA ops for Chamfer distance and PointNet modules
+### Python Packages
+
+We recommend using [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) for environment setup.
+Please install PyTorch manually.
+Note that the current code is only tested under PyTorch 1.10, and PyTorch 1.11 will fail due to changes to header files.
+Below is an example script installing PyTorch with CUDA 11.3 (please make sure the CUDA version matches your machine, as we will compile custom ops later):
+
+```
+conda create -n breaking-bad python=3.8
+conda activate breaking-bad
+conda install pytorch=1.10 torchvision torchaudio cudatoolkit=11.3 -c pytorch
+```
+
+Other related packages can installed via:
+
+```
+pip install -e .
+```
+
+### Custom Ops
+
+Install custom CUDA ops for Chamfer distance and PointNet modules:
 
 1. Go to `multi_part_assembly/utils/chamfer` and run `pip install -e .`
 2. Go to `multi_part_assembly/models/modules/encoder/pointnet2/pointnet2_ops_lib` and run `pip install -e .`
 
 If you meet any errors, make sure your nvcc version is the same as the CUDA version that PyTorch is compiled for. You can get your nvcc version by `nvcc --version`
-
-Install this package: run `pip install -e .`
 
 ## Config System
 

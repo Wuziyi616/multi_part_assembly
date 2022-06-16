@@ -209,7 +209,7 @@ class PartNetPartDataset(Dataset):
 
 
 def build_partnet_dataloader(cfg):
-    train_set = PartNetPartDataset(
+    data_dict = dict(
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
@@ -217,6 +217,7 @@ def build_partnet_dataloader(cfg):
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,
     )
+    train_set = PartNetPartDataset(**data_dict)
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=cfg.exp.batch_size,
@@ -227,14 +228,8 @@ def build_partnet_dataloader(cfg):
         persistent_workers=(cfg.exp.num_workers > 0),
     )
 
-    val_set = PartNetPartDataset(
-        data_dir=cfg.data.data_dir,
-        data_fn=cfg.data.data_fn.format('val'),
-        data_keys=cfg.data.data_keys,
-        min_num_part=cfg.data.min_num_part,
-        max_num_part=cfg.data.max_num_part,
-        overfit=cfg.data.overfit,
-    )
+    data_dict['data_fn'] = cfg.data.data_fn.format('val')
+    val_set = PartNetPartDataset(**data_dict)
     val_loader = DataLoader(
         dataset=val_set,
         batch_size=cfg.exp.batch_size * 2,

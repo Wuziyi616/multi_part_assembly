@@ -29,10 +29,13 @@ def main(cfg):
 
     # on clusters, quota is limited
     # soft link temp space for checkpointing
-    if not os.path.exists(ckp_dir):
-        usr = pwd.getpwuid(os.getuid())[0]
-        os.system(r'ln -s /checkpoint/{}/{}/ {}'.format(
-            usr, SLURM_JOB_ID, ckp_dir))
+    if SLURM_JOB_ID and os.path.isdir('/checkpoint/'):
+        if not os.path.exists(ckp_dir):
+            usr = pwd.getpwuid(os.getuid())[0]
+            os.system(r'ln -s /checkpoint/{}/{}/ {}'.format(
+                usr, SLURM_JOB_ID, ckp_dir))
+    else:
+        os.makedirs(ckp_dir, exist_ok=True)
 
     # configure callbacks
     checkpoint_callback = ModelCheckpoint(

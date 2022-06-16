@@ -24,7 +24,7 @@ class GeometryPartDataset(Dataset):
         overfit=-1,
     ):
         # store parameters
-        self.category = category if category != 'all' else ''
+        self.category = category if category.lower() != 'all' else ''
         self.data_dir = data_dir
         self.num_points = num_points
         self.min_num_part = min_num_part
@@ -42,10 +42,12 @@ class GeometryPartDataset(Dataset):
     def _read_data(self, data_fn):
         """Filter out invalid number of parts."""
         with open(os.path.join(self.data_dir, data_fn), 'r') as f:
-            mesh_list = [
-                line.strip() for line in f.readlines()
-                if self.category in line.split('/')
-            ]
+            mesh_list = [line.strip() for line in f.readlines()]
+            if self.category:
+                mesh_list = [
+                    line for line in mesh_list
+                    if self.category in line.split('/')
+                ]
         data_list = []
         for mesh in mesh_list:
             for frac in os.listdir(os.path.join(self.data_dir, mesh)):
@@ -191,7 +193,7 @@ class GeometryPartDataset(Dataset):
 
 
 def build_geometry_dataloader(cfg):
-    train_set = GeometryPartDataset(
+    data_dict = dict(
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
@@ -202,6 +204,7 @@ def build_geometry_dataloader(cfg):
         rot_range=cfg.data.rot_range,
         overfit=cfg.data.overfit,
     )
+    train_set = GeometryPartDataset(**data_dict)
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=cfg.exp.batch_size,
@@ -212,17 +215,8 @@ def build_geometry_dataloader(cfg):
         persistent_workers=(cfg.exp.num_workers > 0),
     )
 
-    val_set = GeometryPartDataset(
-        data_dir=cfg.data.data_dir,
-        data_fn=cfg.data.data_fn.format('val'),
-        data_keys=cfg.data.data_keys,
-        category=cfg.data.category,
-        num_points=cfg.data.num_pc_points,
-        min_num_part=cfg.data.min_num_part,
-        max_num_part=cfg.data.max_num_part,
-        rot_range=cfg.data.rot_range,
-        overfit=cfg.data.overfit,
-    )
+    data_dict['data_fn'] = cfg.data.data_fn.format('val')
+    val_set = GeometryPartDataset(**data_dict)
     val_loader = DataLoader(
         dataset=val_set,
         batch_size=cfg.exp.batch_size * 2,
