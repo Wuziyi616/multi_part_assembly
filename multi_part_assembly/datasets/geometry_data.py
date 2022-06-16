@@ -50,7 +50,11 @@ class GeometryPartDataset(Dataset):
                 ]
         data_list = []
         for mesh in mesh_list:
-            for frac in os.listdir(os.path.join(self.data_dir, mesh)):
+            mesh_dir = os.path.join(self.data_dir, mesh)
+            if not os.path.isdir(mesh_dir):
+                print(f'{mesh} does not exist!')
+                continue
+            for frac in os.listdir(mesh_dir):
                 # we take both fractures and modes for training
                 if 'fractured' not in frac and 'mode' not in frac:
                     continue
