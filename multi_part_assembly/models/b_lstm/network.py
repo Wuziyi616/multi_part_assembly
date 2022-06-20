@@ -117,6 +117,7 @@ class LSTMModel(BaseModel):
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
+            'part_label': data_dict['part_label'],
             'instance_label': data_dict['instance_label'],
             'part_feats': out_dict.get('part_feats', None),
         }

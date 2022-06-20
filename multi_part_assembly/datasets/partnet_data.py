@@ -178,7 +178,10 @@ class PartNetPartDataset(Dataset):
                                                dtype=np.float32)
 
         for key in self.data_keys:
-            if key == 'part_ids':
+            if key == 'part_label':
+                continue
+
+            elif key == 'part_ids':
                 cur_part_ids = cur_data['geo_part_ids']  # p
                 data_dict['part_ids'] = self._pad_data(cur_part_ids)
 

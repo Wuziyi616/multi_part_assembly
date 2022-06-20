@@ -141,6 +141,7 @@ class PNTransformerRefine(PNTransformer):
         forward_dict = {
             'part_pcs': part_pcs,
             'part_valids': valids,
+            'part_label': data_dict['part_label'],
             'instance_label': data_dict['instance_label'],
             'pc_feats': out_dict.get('pc_feats', None),
         }
