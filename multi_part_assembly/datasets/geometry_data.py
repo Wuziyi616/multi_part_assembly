@@ -9,7 +9,11 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class GeometryPartDataset(Dataset):
-    """Geometry part assembly dataset."""
+    """Geometry part assembly dataset.
+
+    We follow the data prepared by Breaking Bad dataset:
+        https://breaking-bad-dataset.github.io/
+    """
 
     def __init__(
         self,
@@ -147,9 +151,11 @@ class GeometryPartDataset(Dataset):
             'part_valids': MAX_NUM
                 1 for shape parts, 0 for padded zeros.
 
-            'part_ids': MAX_NUM, useless
-
             'instance_label': MAX_NUM x 0, useless
+
+            'part_label': MAX_NUM x 0, useless
+
+            'part_ids': MAX_NUM, useless
 
             'data_id': int
                 ID of the data.
@@ -168,18 +174,19 @@ class GeometryPartDataset(Dataset):
         data_dict['part_valids'] = valids
         # data_id
         data_dict['data_id'] = index
+        # instance_label is useless in non-semantic assembly
+        # keep here for compatibility with semantic assembly
+        # make its last dim 0 so that we concat nothing
+        instance_label = np.zeros((self.max_num_part, 0), dtype=np.float32)
+        data_dict['instance_label'] = instance_label
+        # the same goes to part_label
+        part_label = np.zeros((self.max_num_part, 0), dtype=np.float32)
+        data_dict['part_label'] = part_label
 
         for key in self.data_keys:
             if key == 'part_ids':
                 cur_part_ids = np.arange(num_parts)  # p
                 data_dict['part_ids'] = self._pad_data(cur_part_ids)
-
-            elif key == 'instance_label':
-                # useless in non-semantic assembly
-                # make its last dim 0 so that we concat nothing
-                instance_label = np.zeros((self.max_num_part, 0),
-                                          dtype=np.float32)
-                data_dict['instance_label'] = instance_label
 
             elif key == 'valid_matrix':
                 out = np.zeros((self.max_num_part, self.max_num_part),

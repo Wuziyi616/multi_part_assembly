@@ -44,10 +44,13 @@ class PNTransformer(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label and noise as input
-        feat_dim = self.pc_feat_dim + self.max_num_part \
-            if self.semantic else self.pc_feat_dim
+        dim = self.pc_feat_dim
+        if self.semantic:  # instance_label in semantic assembly
+            dim += self.max_num_part
+        if self.use_part_label:
+            dim += self.cfg.data.num_part_category
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=feat_dim,
+            feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
         )
         return pose_predictor
@@ -84,8 +87,9 @@ class PNTransformer(BaseModel):
             valid_mask = (part_valids == 1)
             corr_feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C]
             # MLP predict poses
+            part_label = data_dict['part_label'].type_as(corr_feats)
             inst_label = data_dict['instance_label'].type_as(corr_feats)
-            feats = torch.cat([corr_feats, inst_label], dim=-1)
+            feats = torch.cat([corr_feats, part_label, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {

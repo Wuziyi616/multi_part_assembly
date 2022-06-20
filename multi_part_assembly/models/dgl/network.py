@@ -59,11 +59,13 @@ class DGLModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label, last_pose and noise as input
-        feat_dim = self.pc_feat_dim + 7
-        if self.semantic:
-            feat_dim += self.max_num_part
+        dim = self.pc_feat_dim + 7
+        if self.semantic:  # instance_label in semantic assembly
+            dim += self.max_num_part
+        if self.use_part_label:
+            dim += self.cfg.data.num_part_category
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=feat_dim,
+            feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
         )
         pose_predictors = _get_clones(pose_predictor, self.iter)
@@ -102,6 +104,7 @@ class DGLModel(BaseModel):
             part_feats = self._extract_part_feats(part_pcs, part_valids)
         local_feats = part_feats
 
+        part_label = data_dict['part_label'].type_as(part_feats)
         instance_label = data_dict['instance_label'].type_as(part_feats)
         B, P = instance_label.shape[:2]
         # initialize a fully connected graph
@@ -182,8 +185,8 @@ class DGLModel(BaseModel):
             part_feats = self.mlp4s[iter_ind](input_4)  # B x P x F
 
             # mlp5, pose prediction
-            input_5 = torch.cat([part_feats, instance_label, pred_pose],
-                                dim=-1)
+            input_5 = torch.cat(
+                [part_feats, part_label, instance_label, pred_pose], dim=-1)
             pred_quat, pred_trans = self.pose_predictors[iter_ind](input_5)
             pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
 

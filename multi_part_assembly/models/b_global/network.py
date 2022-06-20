@@ -30,10 +30,13 @@ class GlobalModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat global & part feature, instance_label and noise as input
-        feat_dim = self.pc_feat_dim * 2 + self.max_num_part if \
-            self.semantic else self.pc_feat_dim * 2
+        dim = self.pc_feat_dim
+        if self.semantic:  # instance_label in semantic assembly
+            dim += self.max_num_part
+        if self.use_part_label:
+            dim += self.cfg.data.num_part_category
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=feat_dim,
+            feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
         )
         return pose_predictor
@@ -76,8 +79,10 @@ class GlobalModel(BaseModel):
             global_feats = global_feats.unsqueeze(1).repeat(
                 1, self.max_num_part, 1)  # [B, P, C]
             # MLP predict poses
+            part_label = data_dict['part_label'].type_as(pc_feats)
             inst_label = data_dict['instance_label'].type_as(pc_feats)
-            feats = torch.cat([global_feats, pc_feats, inst_label], dim=-1)
+            feats = torch.cat([global_feats, pc_feats, part_label, inst_label],
+                              dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {

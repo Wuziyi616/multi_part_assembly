@@ -1,15 +1,15 @@
-"""Artifact subset from the Breaking Bad dataset."""
+"""PartNet semantic assembly dataset."""
 
 from yacs.config import CfgNode as CN
 
 _C = CN()
-_C.dataset = 'geometry'
-_C.data_dir = '/scratch/ssd004/scratch/ziyiwu/data/assembly'
-_C.data_fn = 'artifact.{}.txt'
-_C.data_keys = ('part_ids')
-_C.category = ''  # empty means all categories
-_C.rot_range = -1.  # rotation range for curriculum learning
+_C.dataset = 'partnet'
+_C.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
+_C.data_fn = 'Lamp.{}.npy'
+_C.category = 'Lamp'  # actually useless
+_C.data_keys = ('part_ids', 'match_ids', 'contact_points')
 _C.num_pc_points = 1000  # points per part
+_C.num_part_category = 83
 _C.min_num_part = 2
 _C.max_num_part = 20
 _C.overfit = -1

@@ -24,6 +24,7 @@ class BaseModel(pl.LightningModule):
         self.semantic = (cfg.data.dataset != 'geometry')
         self.max_num_part = self.cfg.data.max_num_part
         self.pc_feat_dim = self.cfg.model.pc_feat_dim
+        self.use_part_label = 'part_label' in cfg.data.data_keys
 
         # loss configs
         self.sample_iter = self.cfg.loss.sample_iter

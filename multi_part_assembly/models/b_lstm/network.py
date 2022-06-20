@@ -39,10 +39,13 @@ class LSTMModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat part feature, instance_label and noise as input
-        feat_dim = self.pc_feat_dim + self.max_num_part if \
-            self.semantic else self.pc_feat_dim
+        dim = self.pc_feat_dim
+        if self.semantic:  # instance_label in semantic assembly
+            dim += self.max_num_part
+        if self.use_part_label:
+            dim += self.cfg.data.num_part_category
         pose_predictor = StocasticPoseRegressor(
-            feat_dim=feat_dim,
+            feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
         )
         return pose_predictor
@@ -82,8 +85,9 @@ class LSTMModel(BaseModel):
         output_seq, _ = self.seq2seq(part_feats_seq, target_seq)
         output_seq = output_seq.squeeze(2).transpose(0, 1)  # [B, P, C']
         # MLP predict poses
+        part_label = data_dict['part_label'].type_as(part_feats)
         inst_label = data_dict['instance_label'].type_as(part_feats)
-        feats = torch.cat([output_seq, inst_label], dim=-1)
+        feats = torch.cat([output_seq, part_label, inst_label], dim=-1)
         quat, trans = self.pose_predictor(feats)
 
         pred_dict = {

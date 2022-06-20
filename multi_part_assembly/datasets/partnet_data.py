@@ -5,13 +5,19 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class PartNetPartDataset(Dataset):
-    """PartNet part assembly dataset."""
+    """PartNet part assembly dataset.
+
+    We follow the data prepared by DGL:
+        https://github.com/hyperplane-lab/Generative-3D-Part-Assembly
+    Currently, can only load one category of shapes in one dataset.
+    """
 
     def __init__(
         self,
         data_dir,
         data_fn,
         data_keys,
+        num_part_category=20,
         min_num_part=2,
         max_num_part=20,
         overfit=-1,
@@ -19,6 +25,7 @@ class PartNetPartDataset(Dataset):
         # store parameters
         self.data_dir = data_dir  # './data'
         self.data_fn = data_fn  # 'Chair.train.npy'
+        self.num_part_category = num_part_category
         self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
         self.level = 3  # fixed in the paper
@@ -84,13 +91,8 @@ class PartNetPartDataset(Dataset):
             'shape_id': int
                 ID of the shape.
 
-            'part_ids': MAX_NUM
-                Indicator of whether two parts are geometrically equivalent,
-                    e.g. [0, 4, 4, 4, 1, 2, 3] means there are 3 same parts.
-                If two parts belong to the same category (e.g. chair leg)
-                    and have the same bbox size, then they are equivalent.
-                This can be used to generate one-hot label to differentiate
-                    parts with same geometry as model input
+            'part_label': MAX_NUM x NUM_PART_CATEGORY
+                One-hot vector of real part labels.
 
             'instance_label': MAX_NUM x MAX_NUM
                 One-hot label to differentiate geometrically equivalent parts.
@@ -104,6 +106,14 @@ class PartNetPartDataset(Dataset):
                      [1, 0, 0, 0, 0, 0, 0]].
                 Say if we extracted per-part feature of shape MAX_NUM x C,
                     we can concat it with `instance_label` and input to final MLP.
+
+            'part_ids': MAX_NUM
+                Indicator of whether two parts are geometrically equivalent,
+                    e.g. [0, 4, 4, 4, 1, 2, 3] means there are 3 same parts.
+                If two parts belong to the same category (e.g. chair leg)
+                    and have the same bbox size, then they are equivalent.
+                This can be used to generate one-hot label to differentiate
+                    parts with same geometry as model input
 
             'match_ids': MAX_NUM
                 Convert from `part_ids`, label parts that have other equivalent
@@ -142,23 +152,35 @@ class PartNetPartDataset(Dataset):
         # data_id and shape_id
         data_dict['data_id'] = index
         data_dict['shape_id'] = int(shape_id)
+        # we always need instance_label in semantic assembly
+        instance_label = np.zeros((self.max_num_part, self.max_num_part),
+                                  dtype=np.float32)
+        cur_part_ids = cur_data['geo_part_ids']  # p
+        num_per_class = [0 for _ in range(max(cur_part_ids) + 1)]
+        for j in range(num_parts):
+            cur_class = int(cur_part_ids[j])
+            cur_instance = int(num_per_class[cur_class])
+            instance_label[j, cur_instance] = 1
+            num_per_class[int(cur_part_ids[j])] += 1
+        data_dict['instance_label'] = instance_label
+        # check whether we need part_label
+        # if yes, make it one_hot encoding
+        # if no, we still make a zero-length vector for compatibility
+        if 'part_label' in self.data_keys:
+            cur_label = np.array(cur_data['part_ids'])  # p
+            cur_label -= 1  # -1 because labels in npy files start from 1
+            cur_one_hot_label = np.zeros((num_parts, self.num_part_category),
+                                         dtype=np.float32)
+            cur_one_hot_label[np.arange(num_parts), cur_label] = 1.
+            data_dict['part_label'] = self._pad_data(cur_one_hot_label)
+        else:
+            data_dict['part_label'] = np.zeros((self.max_num_part, 0),
+                                               dtype=np.float32)
 
         for key in self.data_keys:
             if key == 'part_ids':
                 cur_part_ids = cur_data['geo_part_ids']  # p
                 data_dict['part_ids'] = self._pad_data(cur_part_ids)
-
-            elif key == 'instance_label':
-                instance_label = np.zeros(
-                    (self.max_num_part, self.max_num_part), dtype=np.float32)
-                cur_part_ids = cur_data['geo_part_ids']  # p
-                num_per_class = [0 for _ in range(max(cur_part_ids) + 1)]
-                for j in range(num_parts):
-                    cur_class = int(cur_part_ids[j])
-                    cur_instance = int(num_per_class[cur_class])
-                    instance_label[j, cur_instance] = 1
-                    num_per_class[int(cur_part_ids[j])] += 1
-                data_dict['instance_label'] = instance_label
 
             elif key == 'match_ids':
                 cur_part_ids = cur_data['geo_part_ids']  # p
@@ -213,6 +235,7 @@ def build_partnet_dataloader(cfg):
         data_dir=cfg.data.data_dir,
         data_fn=cfg.data.data_fn.format('train'),
         data_keys=cfg.data.data_keys,
+        num_part_category=cfg.data.num_part_category,
         min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
         overfit=cfg.data.overfit,

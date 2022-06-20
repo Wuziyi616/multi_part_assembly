@@ -61,10 +61,12 @@ class PNTransformerRefine(PNTransformer):
         """Final pose estimator."""
         # concat feature, instance_label and noise as input
         dim = self.pc_feat_dim + 7
-        if self.semantic:
+        if self.semantic:  # instance_label in semantic assembly
             dim += self.max_num_part
         if self.pose_pc_feat:
             dim += self.pc_feat_dim
+        if self.use_part_label:
+            dim += self.cfg.data.num_part_category
         pose_predictor = StocasticPoseRegressor(
             feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
@@ -89,6 +91,7 @@ class PNTransformerRefine(PNTransformer):
             pc_feats = self._extract_part_feats(part_pcs, part_valids)
 
         part_feats = pc_feats
+        part_label = data_dict['part_label'].type_as(pc_feats)
         inst_label = data_dict['instance_label'].type_as(pc_feats)
         B, P, _ = inst_label.shape
         pose = torch.cat([torch.ones(B, P, 1), torch.zeros(B, P, 6)], dim=-1)
@@ -105,11 +108,10 @@ class PNTransformerRefine(PNTransformer):
             valid_mask = (part_valids == 1)
             corr_feats = self.corr_module[i](in_feats, valid_mask)
             # MLP predict poses
+            feats = torch.cat([corr_feats, part_label, inst_label, pose],
+                              dim=-1)
             if self.pose_pc_feat:
-                feats = torch.cat([pc_feats, corr_feats, inst_label, pose],
-                                  dim=-1)
-            else:
-                feats = torch.cat([corr_feats, inst_label, pose], dim=-1)
+                feats = torch.cat([pc_feats, feats], dim=-1)
             quat, trans = self.pose_predictor[i](feats)
             pred_quat.append(quat)
             pred_trans.append(trans)

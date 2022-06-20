@@ -17,8 +17,7 @@ _C.exp = CN()
 _C.exp.val_every = 5  # DGL training is very slow
 
 _C.data = CN()
-_C.data.data_keys = ('part_ids', 'instance_label', 'match_ids',
-                     'contact_points', 'valid_matrix')
+_C.data.data_keys = ('part_ids', 'match_ids', 'contact_points', 'valid_matrix')
 
 
 def get_cfg_defaults():
