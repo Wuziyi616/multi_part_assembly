@@ -24,7 +24,6 @@ class RGLNet(DGLModel):
         BaseModel.__init__(self, cfg)
 
         self.iter = self.cfg.model.gnn_iter
-        self.pose_pc_feat = cfg.model.pose_pc_feat
 
         self.encoder = self._init_encoder()
         self.edge_mlps = self._init_edge_mlps()
@@ -108,8 +107,6 @@ class RGLNet(DGLModel):
             edge_weights = edge_weights.masked_fill(valid_matrix == 0,
                                                     float('-inf'))
             edge_weights = F.softmax(edge_weights, dim=-1)  # B x P x P
-            # avoid nan
-            edge_weights = edge_weights.masked_fill(valid_matrix == 0, 0.)
 
             # GNN nodes pairwise interaction
             part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)
@@ -137,8 +134,6 @@ class RGLNet(DGLModel):
             # pose prediction
             pose_feats = torch.cat(
                 [part_feats, part_label, instance_label, pred_pose], dim=-1)
-            if self.pose_pc_feat:
-                pose_feats = torch.cat([local_feats, pose_feats], dim=-1)
             pred_quat, pred_trans = self.pose_predictors[iter_ind](pose_feats)
             pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
 

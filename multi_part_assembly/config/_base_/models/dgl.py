@@ -7,7 +7,6 @@ _C.name = 'dgl'
 _C.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.pc_feat_dim = 128
 _C.gnn_iter = 5
-_C.pose_pc_feat = False
 
 
 def get_cfg_defaults():
