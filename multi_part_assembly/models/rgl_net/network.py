@@ -107,6 +107,8 @@ class RGLNet(DGLModel):
             edge_weights = edge_weights.masked_fill(valid_matrix == 0,
                                                     float('-inf'))
             edge_weights = F.softmax(edge_weights, dim=-1)  # B x P x P
+            # avoid nan
+            edge_weights = edge_weights.masked_fill(valid_matrix == 0, 0.)
 
             # GNN nodes pairwise interaction
             part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)

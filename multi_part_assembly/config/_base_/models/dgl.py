@@ -7,6 +7,7 @@ _C.name = 'dgl'
 _C.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.pc_feat_dim = 128
 _C.gnn_iter = 5
+_C.merge_node = True  # pool and unpool geometrically equivalent parts
 
 
 def get_cfg_defaults():

@@ -26,13 +26,15 @@ class DGLModel(BaseModel):
         super().__init__(cfg)
 
         self.iter = self.cfg.model.gnn_iter
+        self.merge_node = self.cfg.model.merge_node
 
         self.encoder = self._init_encoder()
         self.edge_mlps = self._init_edge_mlps()
         self.node_mlps = self._init_node_mlps()
         self.pose_predictors = self._init_pose_predictor()
-        self.relation_predictor = RelationNet()
         self.relation_predictor_dense = RelationNet()
+        if self.merge_node:
+            self.relation_predictor = RelationNet()
         self.pose_extractor = PoseEncoder()
 
     def _init_encoder(self):
@@ -108,14 +110,13 @@ class DGLModel(BaseModel):
         instance_label = data_dict['instance_label'].type_as(part_feats)
         B, P = instance_label.shape[:2]
         # initialize a fully connected graph
-        relation_matrix = data_dict['valid_matrix'].double()
-        valid_matrix = relation_matrix  # 1 indicates valid relation
+        valid_matrix = data_dict['valid_matrix']  # 1 indicates valid relation
         pred_pose = torch.zeros((B, P, 7)).type_as(part_feats).detach()
         pred_pose[..., 0] = 1.
 
         # construct same_class_list for GNN node aggregation/separation
         class_list = data_dict.get('class_list', None)
-        if class_list is None and self.semantic:
+        if self.merge_node and self.semantic and class_list is None:
             part_valids = data_dict['part_valids']
             part_ids = data_dict['part_ids']
             class_list = [[] for _ in range(B)]
@@ -130,7 +131,7 @@ class DGLModel(BaseModel):
             if iter_ind >= 1:
                 pose_feats = self.pose_extractor(pred_pose)  # [B, P, C]
                 # merge features of parts in the same class
-                if iter_ind % 2 == 1 and self.semantic:
+                if self.merge_node and self.semantic and iter_ind % 2 == 1:
                     pose_feat = pose_feats.clone()
                     part_feats_copy = part_feats.clone()
                     for i in range(B):
@@ -139,9 +140,9 @@ class DGLModel(BaseModel):
                                 continue
                             pose_feat[i, cls_lst] = pose_feats[i, cls_lst].\
                                 max(dim=-2, keepdim=True)[0]
-                            part_feats_copy[i, cls_lst] = part_feats[
-                                i, cls_lst].max(
-                                    dim=-2, keepdim=True)[0]
+                            part_feats_copy[i, cls_lst] = \
+                                part_feats[i, cls_lst].max(dim=-2,
+                                                           keepdim=True)[0]
                     # the official implementation performs stop gradient
                     # see https://github.com/hyperplane-lab/Generative-3D-Part-Assembly/blob/main/exps/Our_Method-dynamic_graph_learning/models/model_dynamic.py#L236
                     # we discover that detach sometimes cause unstable training
@@ -155,13 +156,13 @@ class DGLModel(BaseModel):
                 pose_feat1 = pose_feat.unsqueeze(1).repeat(1, P, 1, 1)
                 pose_feat2 = pose_feat.unsqueeze(2).repeat(1, 1, P, 1)
                 input_relation = torch.cat([pose_feat1, pose_feat2], dim=-1)
-                if iter_ind % 2 == 0:
-                    new_relation = self.relation_predictor_dense(
-                        input_relation.view(B, P * P, -1)).view(B, P, P)
-                else:
+                if self.merge_node and iter_ind % 2 == 1:
                     new_relation = self.relation_predictor(
                         input_relation.view(B, P * P, -1)).view(B, P, P)
-                relation_matrix = new_relation.double() * valid_matrix
+                else:
+                    new_relation = self.relation_predictor_dense(
+                        input_relation.view(B, P * P, -1)).view(B, P, P)
+                relation_matrix = new_relation * valid_matrix
             else:
                 part_feats_copy = part_feats
 
@@ -171,9 +172,9 @@ class DGLModel(BaseModel):
             pairwise_feats = torch.cat([part_feat1, part_feat2], dim=-1)
             part_relation = \
                 self.edge_mlps[iter_ind](pairwise_feats.view(B * P, P, -1))
-            part_relation = part_relation.view(B, P, P, -1).double()
+            part_relation = part_relation.view(B, P, P, -1)
 
-            # pooling over connected nodes
+            # compute message as weighted sum over edge features
             part_message = part_relation * relation_matrix.unsqueeze(-1)
             part_message = part_message.sum(dim=2)  # B x P x F
             norm = relation_matrix.sum(dim=-1)  # B x P
