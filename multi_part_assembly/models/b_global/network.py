@@ -30,7 +30,7 @@ class GlobalModel(BaseModel):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat global & part feature, instance_label and noise as input
-        dim = self.pc_feat_dim
+        dim = self.pc_feat_dim * 2
         if self.semantic:  # instance_label in semantic assembly
             dim += self.max_num_part
         if self.use_part_label:

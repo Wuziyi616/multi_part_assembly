@@ -106,9 +106,8 @@ class DecoderRNN(nn.Module):
         hidden1, hidden2 = torch.split(hidden, 1, 0)
         output_code = self.linear1(hidden1.squeeze(0))
         stop_sign = self.linear3(hidden1.squeeze(0))
-        output_seq = output_code
 
-        return output, hidden, output_seq, stop_sign
+        return output, hidden, output_code, stop_sign
 
     def initInput(self):
         initial = torch.zeros((1, 1, self.input_size), requires_grad=False)
@@ -132,7 +131,6 @@ class Seq2Seq(nn.Module):
             hidden_size * 2 + 16,
             n_layer=self.n_layer,
             bidirectional=False)
-        self.max_length = 10
 
     def infer_encoder(self, input_seq, batch_size=1):
         """
@@ -170,9 +168,8 @@ class Seq2Seq(nn.Module):
             decoder_outputs.append(output_seq)
             stop_signs.append(stop_sign)
             # using target seq as input or not
-            decoder_input = target_seq[
-                di:di +
-                1] if use_teacher_forcing else output_seq.detach().unsqueeze(0)
+            decoder_input = target_seq[di:di + 1] if \
+                use_teacher_forcing else output_seq.detach().unsqueeze(0)
         decoder_outputs = torch.stack(decoder_outputs, dim=0)
         stop_signs = torch.stack(stop_signs, dim=0)
         return decoder_outputs, stop_signs
@@ -187,11 +184,10 @@ class Seq2Seq(nn.Module):
             stop_signs: (seq_len, batch, num_directions, 1)
         """
         batch_size = target_seq.size(1)
-        # create random noise
+        # create random noise, [n_layer, B, 16]
         random_noise = np.random.normal(
-            loc=0.0, scale=1.0,
-            size=[self.n_layer * 1, batch_size,
-                  16]).astype(np.float32)  # n_layer x B x 16
+            loc=0.0, scale=1.0, size=[self.n_layer * 1, batch_size,
+                                      16]).astype(np.float32)
         random_noise = torch.tensor(random_noise).type_as(input_seq)
 
         encoder_hidden = self.infer_encoder(input_seq, batch_size)

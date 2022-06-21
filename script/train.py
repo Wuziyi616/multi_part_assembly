@@ -22,9 +22,8 @@ def main(cfg):
 
     # Create checkpoint directory
     SLURM_JOB_ID = os.environ.get('SLURM_JOB_ID')
-    exp_name = cfg.model.name
     cfg_name = os.path.basename(args.cfg_file)[:-3]  # remove '.py'
-    ckp_dir = os.path.join(cfg.exp.ckp_dir, exp_name, cfg_name, 'models')
+    ckp_dir = os.path.join(cfg.exp.ckp_dir, cfg_name, 'models')
     os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)
 
     # on clusters, quota is limited
@@ -55,9 +54,13 @@ def main(cfg):
                                                   train_loader, val_loader)
         callbacks.append(assembly_callback)
 
-    logger_name = f'{exp_name}-{cfg_name}-{SLURM_JOB_ID}'
+    logger_name = f'{cfg_name}-{SLURM_JOB_ID}'
     logger = WandbLogger(
-        project='Multi-Part-Assembly', name=logger_name, id=logger_name)
+        project='Multi-Part-Assembly',
+        name=logger_name,
+        id=logger_name,
+        save_dir=ckp_dir,
+    )
 
     all_gpus = list(cfg.exp.gpus)
     trainer = pl.Trainer(

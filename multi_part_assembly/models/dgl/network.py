@@ -28,8 +28,8 @@ class DGLModel(BaseModel):
         self.iter = self.cfg.model.gnn_iter
 
         self.encoder = self._init_encoder()
-        self.mlp3s = self._init_mlp3s()
-        self.mlp4s = self._init_mlp4s()
+        self.edge_mlps = self._init_edge_mlps()
+        self.node_mlps = self._init_node_mlps()
         self.pose_predictors = self._init_pose_predictor()
         self.relation_predictor = RelationNet()
         self.relation_predictor_dense = RelationNet()
@@ -44,17 +44,17 @@ class DGLModel(BaseModel):
         )
         return encoder
 
-    def _init_mlp3s(self):
-        """MLP3 in GNN message passing."""
-        mlp3s = nn.ModuleList(
+    def _init_edge_mlps(self):
+        """MLP in GNN calculating edge features."""
+        edge_mlps = nn.ModuleList(
             [MLP3(self.pc_feat_dim) for _ in range(self.iter)])
-        return mlp3s
+        return edge_mlps
 
-    def _init_mlp4s(self):
-        """MLP3 in GNN node feature aggregation."""
-        mlp4s = nn.ModuleList(
+    def _init_node_mlps(self):
+        """MLP in GNN performing node feature aggregation."""
+        node_mlps = nn.ModuleList(
             [MLP4(self.pc_feat_dim) for _ in range(self.iter)])
-        return mlp4s
+        return node_mlps
 
     def _init_pose_predictor(self):
         """Final pose estimator."""
@@ -165,11 +165,12 @@ class DGLModel(BaseModel):
             else:
                 part_feats_copy = part_feats
 
-            # mlp3, GNN nodes pairwise interaction
+            # GNN nodes pairwise interaction
             part_feat1 = part_feats_copy.unsqueeze(2).repeat(1, 1, P, 1)
             part_feat2 = part_feats_copy.unsqueeze(1).repeat(1, P, 1, 1)
-            input_3 = torch.cat([part_feat1, part_feat2], dim=-1)
-            part_relation = self.mlp3s[iter_ind](input_3.view(B * P, P, -1))
+            pairwise_feats = torch.cat([part_feat1, part_feat2], dim=-1)
+            part_relation = \
+                self.edge_mlps[iter_ind](pairwise_feats.view(B * P, P, -1))
             part_relation = part_relation.view(B, P, P, -1).double()
 
             # pooling over connected nodes
@@ -179,15 +180,15 @@ class DGLModel(BaseModel):
             normed_part_message = \
                 part_message / (norm.unsqueeze(dim=-1) + 1e-6)
 
-            # mlp4, node aggregation
-            input_4 = torch.cat(
+            # GNN node aggregation
+            node_feats = torch.cat(
                 [normed_part_message.type_as(part_feats), part_feats], dim=-1)
-            part_feats = self.mlp4s[iter_ind](input_4)  # B x P x F
+            part_feats = self.node_mlps[iter_ind](node_feats)  # B x P x F
 
-            # mlp5, pose prediction
-            input_5 = torch.cat(
+            # pose prediction
+            pose_feats = torch.cat(
                 [part_feats, part_label, instance_label, pred_pose], dim=-1)
-            pred_quat, pred_trans = self.pose_predictors[iter_ind](input_5)
+            pred_quat, pred_trans = self.pose_predictors[iter_ind](pose_feats)
             pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
 
             # save poses
