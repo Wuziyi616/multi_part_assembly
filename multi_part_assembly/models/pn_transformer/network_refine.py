@@ -81,6 +81,8 @@ class PNTransformerRefine(PNTransformer):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
+                - part_label: [B, P, NUM_PART_CATEGORY] when using as input
+                    otherwise [B, P, 0] just a placeholder for compatibility
                 - instance_label: [B, P, P (0 in geometry assembly)]
             may contains:
                 - pc_feats: [B, P, C] (reused) or None

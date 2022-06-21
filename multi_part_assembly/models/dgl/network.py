@@ -3,7 +3,6 @@
 import numpy as np
 
 import torch
-import torch.nn as nn
 
 from multi_part_assembly.utils import _get_clones
 from multi_part_assembly.models import BaseModel
@@ -48,14 +47,14 @@ class DGLModel(BaseModel):
 
     def _init_edge_mlps(self):
         """MLP in GNN calculating edge features."""
-        edge_mlps = nn.ModuleList(
-            [MLP3(self.pc_feat_dim) for _ in range(self.iter)])
+        edge_mlp = MLP3(self.pc_feat_dim)
+        edge_mlps = _get_clones(edge_mlp, self.iter)
         return edge_mlps
 
     def _init_node_mlps(self):
         """MLP in GNN performing node feature aggregation."""
-        node_mlps = nn.ModuleList(
-            [MLP4(self.pc_feat_dim) for _ in range(self.iter)])
+        node_mlp = MLP4(self.pc_feat_dim)
+        node_mlps = _get_clones(node_mlp, self.iter)
         return node_mlps
 
     def _init_pose_predictor(self):
@@ -91,6 +90,8 @@ class DGLModel(BaseModel):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
+                - part_label: [B, P, NUM_PART_CATEGORY] when using as input
+                    otherwise [B, P, 0] just a placeholder for compatibility
                 - instance_label: [B, P, P (0 in geometry assembly)]
                 - part_ids: [B, P]
                 - valid_matrix: [B, P, P]
@@ -165,6 +166,7 @@ class DGLModel(BaseModel):
                 relation_matrix = new_relation * valid_matrix
             else:
                 part_feats_copy = part_feats
+                relation_matrix = valid_matrix
 
             # GNN nodes pairwise interaction
             part_feat1 = part_feats_copy.unsqueeze(2).repeat(1, 1, P, 1)

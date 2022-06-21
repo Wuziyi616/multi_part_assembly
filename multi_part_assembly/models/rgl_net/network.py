@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from multi_part_assembly.utils import _get_clones
 from multi_part_assembly.models import BaseModel, DGLModel
 
 from .modules import MLP4, RelationNet, PoseEncoder
@@ -35,22 +36,21 @@ class RGLNet(DGLModel):
 
     def _init_node_mlps(self):
         """MLP in GNN performing node feature aggregation."""
-        node_mlps = nn.ModuleList(
-            [MLP4(self.pc_feat_dim) for _ in range(self.iter)])
+        node_mlp = MLP4(self.pc_feat_dim)
+        node_mlps = _get_clones(node_mlp, self.iter)
         return node_mlps
 
     def _init_grus(self):
         """GRU module for progressive message encoding."""
-        grus = nn.ModuleList([
-            nn.GRU(
-                input_size=self.pc_feat_dim * 2,
-                hidden_size=self.pc_feat_dim * 2,
-                num_layers=1,
-                batch_first=True,
-                dropout=0,
-                bidirectional=True,
-            ) for _ in range(self.iter)
-        ])
+        gru = nn.GRU(
+            input_size=self.pc_feat_dim * 2,
+            hidden_size=self.pc_feat_dim * 2,
+            num_layers=1,
+            batch_first=True,
+            dropout=0,
+            bidirectional=True,
+        )
+        grus = _get_clones(gru, self.iter)
         return grus
 
     def _rand_gru_hidden(self, B):
@@ -68,6 +68,8 @@ class RGLNet(DGLModel):
             data_dict shoud contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
+                - part_label: [B, P, NUM_PART_CATEGORY] when using as input
+                    otherwise [B, P, 0] just a placeholder for compatibility
                 - instance_label: [B, P, P (0 in geometry assembly)]
                 - part_ids: [B, P]
                 - valid_matrix: [B, P, P]
