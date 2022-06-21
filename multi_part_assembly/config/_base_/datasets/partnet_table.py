@@ -12,6 +12,7 @@ _C.num_pc_points = 1000  # points per part
 _C.num_part_category = 82
 _C.min_num_part = 2
 _C.max_num_part = 20
+_C.shuffle_parts = False
 _C.overfit = -1
 _C.colors = [
     [0, 204, 0],

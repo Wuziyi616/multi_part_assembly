@@ -20,6 +20,7 @@ class PartNetPartDataset(Dataset):
         num_part_category=20,
         min_num_part=2,
         max_num_part=20,
+        shuffle_parts=False,
         overfit=-1,
     ):
         # store parameters
@@ -28,6 +29,7 @@ class PartNetPartDataset(Dataset):
         self.num_part_category = num_part_category
         self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
+        self.shuffle_parts = shuffle_parts  # shuffle part orders
         self.level = 3  # fixed in the paper
 
         # list of data_idx, [43250,  3069, 37825, 43941, 40503, ...]
@@ -69,8 +71,13 @@ class PartNetPartDataset(Dataset):
         assert self.min_num_part <= num_parts <= self.max_num_part
         """
         `cur_data` is dict stored in separate npz files with following keys:
-            'part_pcs', 'part_poses', 'part_ids', 'geo_part_ids', 'sym'
+            'part_pcs', 'part_poses', 'part_ids', 'geo_part_ids', 'sym', 'bbox'
         """
+        # shuffle part orders
+        if self.shuffle_parts:
+            idx = np.random.permutation(num_parts)
+            for k, v in cur_data.items():
+                cur_data[k] = np.array(v)[idx]
         """
         data_dict = {
             'part_pcs': MAX_NUM x N x 3
@@ -241,6 +248,7 @@ def build_partnet_dataloader(cfg):
         num_part_category=cfg.data.num_part_category,
         min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
+        shuffle_parts=cfg.data.shuffle_parts,
         overfit=cfg.data.overfit,
     )
     train_set = PartNetPartDataset(**data_dict)
@@ -255,6 +263,7 @@ def build_partnet_dataloader(cfg):
     )
 
     data_dict['data_fn'] = cfg.data.data_fn.format('val')
+    data_dict['shuffle_parts'] = False
     val_set = PartNetPartDataset(**data_dict)
     val_loader = DataLoader(
         dataset=val_set,

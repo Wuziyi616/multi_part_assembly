@@ -24,6 +24,7 @@ class GeometryPartDataset(Dataset):
         num_points=1000,
         min_num_part=2,
         max_num_part=20,
+        shuffle_parts=False,
         rot_range=-1,
         overfit=-1,
     ):
@@ -33,6 +34,7 @@ class GeometryPartDataset(Dataset):
         self.num_points = num_points
         self.min_num_part = min_num_part
         self.max_num_part = max_num_part  # ignore shapes with more parts
+        self.shuffle_parts = shuffle_parts  # shuffle part orders
         self.rot_range = rot_range  # rotation range in degree
 
         # list of fracture folder path
@@ -113,6 +115,11 @@ class GeometryPartDataset(Dataset):
         if not self.min_num_part <= len(mesh_files) <= self.max_num_part:
             raise ValueError
 
+        # shuffle part orders
+        if self.shuffle_parts:
+            random.shuffle(mesh_files)
+
+        # read mesh and sample points
         meshes = [
             trimesh.load(os.path.join(data_folder, mesh_file))
             for mesh_file in mesh_files
@@ -212,6 +219,7 @@ def build_geometry_dataloader(cfg):
         num_points=cfg.data.num_pc_points,
         min_num_part=cfg.data.min_num_part,
         max_num_part=cfg.data.max_num_part,
+        shuffle_parts=cfg.data.shuffle_parts,
         rot_range=cfg.data.rot_range,
         overfit=cfg.data.overfit,
     )
@@ -227,6 +235,7 @@ def build_geometry_dataloader(cfg):
     )
 
     data_dict['data_fn'] = cfg.data.data_fn.format('val')
+    data_dict['shuffle_parts'] = False
     val_set = GeometryPartDataset(**data_dict)
     val_loader = DataLoader(
         dataset=val_set,

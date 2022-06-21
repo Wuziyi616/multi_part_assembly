@@ -12,6 +12,7 @@ _C.rot_range = -1.  # rotation range for curriculum learning
 _C.num_pc_points = 1000  # points per part
 _C.min_num_part = 2
 _C.max_num_part = 20
+_C.shuffle_parts = False
 _C.overfit = -1
 _C.colors = [
     [0, 204, 0],
