@@ -4,7 +4,7 @@ from multi_part_assembly.config.utils import merge_cfg
 
 _base_ = {
     'exp': '../_base_/default_exp.py',
-    'data': '../_base_/datasets/partnet_chair.py',
+    'data': '../_base_/datasets/partnet/partnet_chair.py',
     'optimizer': '../_base_/schedules/adam_cosine.py',
     'model': '../_base_/models/lstm.py',
     'loss': '../_base_/models/loss/semantic_loss.py',
@@ -12,6 +12,9 @@ _base_ = {
 
 # Miscellaneous configs
 _C = CN()
+
+_C.data = CN()
+_C.data.shuffle_parts = True  # avoid part label leakage from orders
 
 
 def get_cfg_defaults():

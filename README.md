@@ -6,14 +6,16 @@
 
 We recommend using [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) for environment setup.
 Please install PyTorch manually.
-Note that the current code is only tested under PyTorch 1.10, and PyTorch 1.11 will fail due to changes to header files.
 Below is an example script installing PyTorch with CUDA 11.3 (please make sure the CUDA version matches your machine, as we will compile custom ops later):
 
 ```
-conda create -n breaking-bad python=3.8
-conda activate breaking-bad
+conda create -n assembly python=3.8
+conda activate assembly
 conda install pytorch=1.10 torchvision torchaudio cudatoolkit=11.3 -c pytorch
 ```
+
+You can use `nvcc --version` to see the CUDA version of your machine.
+**Note that the current code is only tested under PyTorch 1.10, and PyTorch 1.11 will fail due to changes to header files**.
 
 Other related packages can installed via:
 
@@ -62,6 +64,9 @@ _base_ = {'data': 'datasets/partnet.py'}
 
 _C = CN()
 
+_C.data = CN()
+_C.data.data_dir = '../data/partnet'
+
 _C.exp = CN()
 _C.exp.num_epochs = 200
 
@@ -76,19 +81,27 @@ def get_cfg_defaults():
 
 ```
 
-Then, when calling `foo` it will have both `exp` field and `data` field. Note that the values set in the child config will overwrite the base one.
+Then, when calling `foo` it will have both `exp` field and `data` field.
+Note that the values set in the child config will overwrite the base one, i.e. `foo_cfg.data.data_dir` will be `'../data/partnet'` instead of `'./data/partnet'`.
 
 In general, each training config is composed of a **exp** (general settings, e.g. checkpoint, epochs), a **data** (dataset setting), a **optimizer** (learning rate and scheduler), a **model** (network architecture), and a **loss** config.
+
+To inspect one specific config file, simply call our privided script:
+
+```
+python script/print_cfg.py --cfg_file $CFG
+```
 
 ## Training
 
 To train a model, simply run:
 
 ```
-python script/train.py --cfg_file multi_part_assembly/config/global/global-32x1-cosine_200e-partnet_chair.py
+python script/train.py --cfg_file $CFG --other_args ...
 ```
 
-Optional arguments:
+For example, to train the Global baseline model on PartNet chair, replace `$CFG` with `multi_part_assembly/config/global/global-32x1-cosine_200e-partnet_chair.py`.
+Other optional arguments include:
 
 -   `--category`: train the model only on a subset of data, e.g. `Chair`, `Table`, `Lamp` on PartNet
 -   `--gpus`: setting training GPUs, note that by default we are using DP training. Please modify `script/train.py` to enable DDP training
@@ -116,7 +129,7 @@ GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./script/dup_
 Similar to training, to test a pre-trained weight, simply run:
 
 ```
-python script/test.py --cfg_file multi_part_assembly/config/global/global-32x1-cosine_200e-partnet_chair.py --weight path/to/weight
+python script/test.py --cfg_file $CFG --weight path/to/weight
 ```
 
 Optional auguments:
@@ -128,7 +141,7 @@ Optional auguments:
 If you want to get per-category result of this model, and report performance averaged over all the categories (used in the paper), run:
 
 ```
-python script/test.py --cfg_file multi_part_assembly/config/global/global-32x1-cosine_200e-partnet_chair.py --weight path/to/weight --category all
+python script/test.py --cfg_file $CFG --weight path/to/weight --category all
 ```
 
 We will print the metrics on each category and the averaged results.

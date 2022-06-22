@@ -105,7 +105,7 @@ def test(cfg):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Training script')
+    parser = argparse.ArgumentParser(description='Testing script')
     parser.add_argument('--cfg_file', required=True, type=str, help='.py')
     parser.add_argument('--min_num_part', type=int, default=-1)
     parser.add_argument('--max_num_part', type=int, default=-1)
