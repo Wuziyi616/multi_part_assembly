@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from multi_part_assembly.utils import _get_clones
-from multi_part_assembly.models import BaseModel, DGLModel
+from multi_part_assembly.models import BaseModel, DGLModel, RNNWrapper
 
 from .modules import MLP4, RelationNet, PoseEncoder
 
@@ -25,6 +25,7 @@ class RGLNet(DGLModel):
         BaseModel.__init__(self, cfg)
 
         self.iter = self.cfg.model.gnn_iter
+        self.rnn_pack = self.cfg.model.rnn_pack
 
         self.encoder = self._init_encoder()
         self.edge_mlps = self._init_edge_mlps()
@@ -50,6 +51,7 @@ class RGLNet(DGLModel):
             dropout=0,
             bidirectional=True,
         )
+        gru = RNNWrapper(gru, batch_first=True)
         grus = _get_clones(gru, self.iter)
         return grus
 
@@ -129,8 +131,12 @@ class RGLNet(DGLModel):
                 torch.cat([part_feats, messages], dim=-1)  # B x P x 2F
             init_hidden = \
                 self._rand_gru_hidden(B).type_as(gru_inputs)  # 2 x B x 2F
-            gru_outputs, _ = \
-                self.grus[iter_ind](gru_inputs, init_hidden)  # B x P x 4F
+            part_valids = data_dict['part_valids'] if self.rnn_pack else None
+            gru_outputs, _ = self.grus[iter_ind](
+                gru_inputs,
+                init_hidden,
+                valids=part_valids,
+            )  # B x P x 4F
 
             # node feature update
             part_feats = self.node_mlps[iter_ind](gru_outputs)  # B x P x F

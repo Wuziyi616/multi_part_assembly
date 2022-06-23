@@ -14,7 +14,8 @@ _base_ = {
 _C = CN()
 
 _C.exp = CN()
-_C.exp.val_every = 5  # to be the same as DGL
+_C.exp.num_epochs = 300  # keep the same as DGL
+_C.exp.val_every = 5  # keep the same as DGL
 
 _C.data = CN()
 _C.data.data_keys = ('part_ids', 'match_ids', 'contact_points', 'valid_matrix')

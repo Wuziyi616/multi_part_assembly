@@ -1,5 +1,5 @@
 from .modules import build_encoder, PointNet, DGCNN, PointNet2SSG, PointNet2MSG
-from .modules import PoseRegressor, StocasticPoseRegressor, BaseModel
+from .modules import PoseRegressor, StocasticPoseRegressor, BaseModel, RNNWrapper
 from .pn_transformer import PNTransformer, PNTransformerGAN, PNTransformerRefine
 from .b_global import GlobalModel
 from .b_lstm import LSTMModel

@@ -10,8 +10,8 @@ _C.pc_feat_dim = 128
 # I find that 3 iter is faster and better than 5 iter
 _C.gnn_iter = 3  # 5
 # pool and unpool geometrically equivalent parts
-# I find that not doing node pooling/unpooling is even better
-_C.merge_node = False  # True
+# it's indeed helpful in semantic assembly according to my ablation study
+_C.merge_node = True
 
 
 def get_cfg_defaults():

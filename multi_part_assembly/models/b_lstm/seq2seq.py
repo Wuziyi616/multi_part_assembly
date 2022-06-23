@@ -6,14 +6,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from multi_part_assembly.models import RNNWrapper
+
 
 class EncoderRNN(nn.Module):
 
-    def __init__(self,
-                 input_size,
-                 hidden_size,
-                 n_layer=1,
-                 bidirectional=False):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        n_layer=1,
+        bidirectional=False,
+    ):
         super().__init__()
 
         self.input_size = input_size
@@ -27,7 +31,8 @@ class EncoderRNN(nn.Module):
             hidden_size,
             n_layer,
             bidirectional=bidirectional,
-            dropout=0.2 if n_layer == 2 else 0)
+            dropout=0.2 if n_layer == 2 else 0,
+        )
 
         self.init_hidden = self.initHidden()
 
@@ -46,16 +51,19 @@ class EncoderRNN(nn.Module):
             self.n_layer * self.num_directions,
             batch_size,
             self.hidden_size,
-            requires_grad=False)
+            requires_grad=False,
+        )
 
 
 class DecoderRNN(nn.Module):
 
-    def __init__(self,
-                 input_size,
-                 hidden_size,
-                 n_layer=1,
-                 bidirectional=False):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        n_layer=1,
+        bidirectional=False,
+    ):
         super().__init__()
 
         self.input_size = input_size
@@ -70,7 +78,8 @@ class DecoderRNN(nn.Module):
             hidden_size,
             n_layer,
             bidirectional=bidirectional,
-            dropout=0.2 if n_layer == 2 else 0)
+            dropout=0.2 if n_layer == 2 else 0,
+        )
         self.linear1 = nn.Sequential(
             nn.Linear(hidden_size, self.n_units_hidden1),
             nn.LeakyReLU(True),
@@ -121,44 +130,52 @@ class Seq2Seq(nn.Module):
         super().__init__()
 
         self.n_layer = 2
-        self.encoder = EncoderRNN(
+
+        encoder = EncoderRNN(
             enc_input_size,
             hidden_size,
             n_layer=self.n_layer,
-            bidirectional=True)
+            bidirectional=True,
+        )
+        self.encoder = RNNWrapper(encoder, batch_first=False)
+
+        # no need to wrap decoder because it's single-directional
         self.decoder = DecoderRNN(
             dec_input_size,
             hidden_size * 2 + 16,
             n_layer=self.n_layer,
-            bidirectional=False)
+            bidirectional=False,
+        )
 
-    def infer_encoder(self, input_seq, batch_size=1):
+    def infer_encoder(self, input_seq, valids=None, batch_size=1):
         """
         :param input_seq: (n_parts, 1, feature_dim)
         :return:
             h_n: (num_layers * num_directions, batch, hidden_size)
         """
-        encoder_init_hidden = self.encoder.init_hidden.repeat(
-            1, batch_size, 1).cuda()
-        _, hidden = self.encoder(input_seq, encoder_init_hidden)
+        encoder_init_hidden = \
+            self.encoder.rnn.init_hidden.repeat(1, batch_size, 1).cuda()
+        _, hidden = self.encoder(input_seq, encoder_init_hidden, valids=valids)
         hidden = hidden.view(self.n_layer, 2, batch_size, -1)
         hidden0, hidden1 = torch.split(hidden, 1, 1)
         hidden = torch.cat([hidden0.squeeze(1), hidden1.squeeze(1)], 2)
         return hidden
 
-    def infer_decoder(self,
-                      decoder_hidden,
-                      target_seq,
-                      teacher_forcing_ratio=0.5):
+    def infer_decoder(
+        self,
+        decoder_hidden,
+        target_seq,
+        teacher_forcing_ratio=0.5,
+    ):
         batch_size = target_seq.size(1)
         target_length = target_seq.size(0)
-        decoder_input = self.decoder.init_input.detach().repeat(
-            1, batch_size, 1).cuda()
+        decoder_input = \
+            self.decoder.init_input.detach().repeat(1, batch_size, 1).cuda()
 
         # Teacher forcing: Feed the target as the next input
         # Without teacher forcing: use its own predictions as the next input
-        use_teacher_forcing = True if random.random(
-        ) < teacher_forcing_ratio else False
+        use_teacher_forcing = True if \
+            random.random() < teacher_forcing_ratio else False
 
         decoder_outputs = []
         stop_signs = []
@@ -174,10 +191,17 @@ class Seq2Seq(nn.Module):
         stop_signs = torch.stack(stop_signs, dim=0)
         return decoder_outputs, stop_signs
 
-    def forward(self, input_seq, target_seq, teacher_forcing_ratio=0.5):
+    def forward(
+        self,
+        input_seq,
+        target_seq,
+        valids=None,
+        teacher_forcing_ratio=0.5,
+    ):
         """
-        :param input_seq: (seq_len, batch_size, feature_dim) PackedSequence
+        :param input_seq: (seq_len, batch_size, feature_dim)
         :param target_seq: (seq_len, batch_size, feature_dim)
+        :param valids: (batch_size, seq_len), 1 for valid, 0 for invalid
         :param teacher_forcing_ratio: float
         :return:
             decoder_outputs: (seq_len, batch, num_directions, output_size)
@@ -186,11 +210,13 @@ class Seq2Seq(nn.Module):
         batch_size = target_seq.size(1)
         # create random noise, [n_layer, B, 16]
         random_noise = np.random.normal(
-            loc=0.0, scale=1.0, size=[self.n_layer * 1, batch_size,
-                                      16]).astype(np.float32)
+            loc=0.0,
+            scale=1.0,
+            size=[self.n_layer * 1, batch_size, 16],
+        ).astype(np.float32)
         random_noise = torch.tensor(random_noise).type_as(input_seq)
 
-        encoder_hidden = self.infer_encoder(input_seq, batch_size)
+        encoder_hidden = self.infer_encoder(input_seq, valids, batch_size)
         decoder_hidden = torch.cat([encoder_hidden, random_noise], dim=2)
         decoder_outputs, stop_signs = self.infer_decoder(
             decoder_hidden, target_seq, teacher_forcing_ratio)

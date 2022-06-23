@@ -14,6 +14,7 @@ _base_ = {
 _C = CN()
 
 _C.exp = CN()
+_C.exp.num_epochs = 300  # longer training time
 _C.exp.val_every = 5  # DGL training is very slow
 
 _C.data = CN()

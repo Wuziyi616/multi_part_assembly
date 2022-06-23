@@ -7,6 +7,7 @@ _C.name = 'lstm'
 _C.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.pc_feat_dim = 128
 _C.lstm_hidden_size = 256
+_C.rnn_pack = False
 
 
 def get_cfg_defaults():
