@@ -15,7 +15,7 @@ from yacs.config import CfgNode as CN
 #       also note that there is almost no symmetry in this dataset
 _C = CN()
 _C.noise_dim = 0  # no stochastic
-_C.sample_iter = 1  # MoN loss sampling
+_C.sample_iter = 1  # no need to do MoN loss sampling
 _C.trans_loss_w = 1.
 _C.rot_pt_cd_loss_w = 10.
 _C.transform_pt_cd_loss_w = 10.

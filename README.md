@@ -30,7 +30,16 @@ Install custom CUDA ops for Chamfer distance and PointNet modules:
 1. Go to `multi_part_assembly/utils/chamfer` and run `pip install -e .`
 2. Go to `multi_part_assembly/models/modules/encoder/pointnet2/pointnet2_ops_lib` and run `pip install -e .`
 
-If you meet any errors, make sure your nvcc version is the same as the CUDA version that PyTorch is compiled for. You can get your nvcc version by `nvcc --version`
+If you meet any errors, make sure your nvcc version is the same as the CUDA version that PyTorch is compiled for.
+
+### Data Preparation
+
+The codebase currently supports two assembly datasets:
+
+-   PartNet is a semantic assembly dataset, where each shape (furniture) is decomposed to semantically meaningful parts (e.g. chair legs, backs and arms). We adopt the pre-processed data provided by [DGL](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly). Please follow their [instructions](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly#file-structure) to download the data in `.npy` format.
+-   Breaking Bad is a geometric assembly dataset, where each shape breaks down to several fractures without clear semantics. Please follow their [instructions](https://github.com/Breaking-Bad-Dataset/Breaking-Bad-Dataset.github.io/blob/main/README.md) to process the data. The main experiments are conducted on the `everyday` and `artifact` subsets. The `other` subset is very large (~900G) so you may exclude it.
+
+After downloading and processing all the data, please modify the `_C.data_dir` key in the config files under `multi_part_assembly/config/_base_/datasets`.
 
 ## Config System
 

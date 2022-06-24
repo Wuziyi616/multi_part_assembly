@@ -40,6 +40,7 @@ class RNNWrapper(nn.Module):
             output, _ = pad_packed_sequence(
                 output,
                 batch_first=self.batch_first,
+                total_length=valids.shape[1],
             )
 
         return output, hidden

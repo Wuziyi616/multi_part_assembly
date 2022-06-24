@@ -17,8 +17,6 @@ class LSTMModel(BaseModel):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self.rnn_pack = self.cfg.model.rnn_pack
-
         self.encoder = self._init_encoder()
         self.seq2seq = self._init_seq2seq()
         self.pose_predictor = self._init_pose_predictor()
@@ -86,11 +84,10 @@ class LSTMModel(BaseModel):
         # prepare seq2seq input
         part_feats_seq = part_feats.transpose(0, 1).contiguous()  # [P, B, C]
         target_seq = part_feats_seq.detach()
-        part_valids = data_dict['part_valids'] if self.rnn_pack else None
         output_seq, _ = self.seq2seq(
             part_feats_seq,
             target_seq,
-            valids=part_valids,
+            valids=data_dict['part_valids'],
         )
         output_seq = output_seq.squeeze(2).transpose(0, 1)  # [B, P, C']
         # MLP predict poses
