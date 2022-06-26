@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from multi_part_assembly.models import VNLinear, VNBatchNorm, VNMaxPool, \
+from ..vnn import VNLinear, VNBatchNorm, VNMaxPool, \
     VNLinearBNLeakyReLU
 
 
@@ -107,16 +107,16 @@ class VNPointNet(nn.Module):
         self.bn5 = VNBatchNorm(feat_dim, dim=4)
 
         pool1 = kwargs.get('pool1', 'mean')  # in-knn pooling
-        self.pool1 = self._build_pooling(pool1)
+        self.pool1 = self._build_pooling(pool1, 64)
         pool2 = kwargs.get('pool2', 'max')  # final global_feats pooling
-        self.pool2 = self._build_pooling(pool2)
+        self.pool2 = self._build_pooling(pool2, feat_dim)
 
         self.global_feat = global_feat
 
     @staticmethod
-    def _build_pooling(pooling):
+    def _build_pooling(pooling, dim=None):
         if pooling == 'max':
-            pool = VNMaxPool(64 // 3)
+            pool = VNMaxPool(dim)
         elif pooling == 'mean':
             pool = mean_pool
         else:
@@ -130,7 +130,7 @@ class VNPointNet(nn.Module):
         x = x.unsqueeze(1)  # [B, 1, 3, N]
         feat = vn_get_graph_feature(x)  # [B, 3, 3, N, k]
         x = self.conv1(feat)  # [B, C, 3, N, k]
-        x = self.pool(x)  # [B, C, 3, N]
+        x = self.pool1(x)  # [B, C, 3, N]
 
         x = self.conv2(x)
         x = self.conv3(x)
@@ -139,7 +139,7 @@ class VNPointNet(nn.Module):
         x = self.bn5(self.conv5(x))  # [B, feat_dim, 3, N]
 
         if self.global_feat:
-            feat = self.pool(x)  # [B, feat_dim, 3]
+            feat = self.pool2(x)  # [B, feat_dim, 3]
         else:
             feat = x.permute(0, 3, 1, 2).contiguous()  # [B, N, feat_dim, 3]
         return feat

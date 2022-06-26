@@ -1,3 +1,5 @@
+"""Code borrowed from: https://github.com/FlyingGiraffe/vnn-pc"""
+
 import torch
 import torch.nn as nn
 
