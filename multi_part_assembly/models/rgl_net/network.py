@@ -1,13 +1,13 @@
-"""Re-implementation according to the paper."""
+"""Code borrowed from https://github.com/absdnd/RGL_NET_Progressive_Part_Assembly/blob/main/models/model_Ours.py"""
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from multi_part_assembly.utils import _get_clones
-from multi_part_assembly.models import BaseModel, DGLModel, RNNWrapper
+from multi_part_assembly.models import DGLModel, RNNWrapper
 
-from .modules import MLP4, RelationNet, PoseEncoder
+from .modules import MLP4
 
 
 class RGLNet(DGLModel):
@@ -22,20 +22,14 @@ class RGLNet(DGLModel):
     """
 
     def __init__(self, cfg):
-        BaseModel.__init__(self, cfg)
+        super().__init__(cfg)
 
-        self.iter = self.cfg.model.gnn_iter
-
-        self.encoder = self._init_encoder()
-        self.edge_mlps = self._init_edge_mlps()
-        self.node_mlps = self._init_node_mlps()
-        self.pose_predictors = self._init_pose_predictor()
-        self.relation_predictor = RelationNet()
-        self.pose_extractor = PoseEncoder()
         self.grus = self._init_grus()
 
     def _init_node_mlps(self):
         """MLP in GNN performing node feature aggregation."""
+        # input dim is different from DGL's node_mlp
+        # because here it also inputs hidden states from GRU
         node_mlp = MLP4(self.pc_feat_dim)
         node_mlps = _get_clones(node_mlp, self.iter)
         return node_mlps
@@ -54,13 +48,25 @@ class RGLNet(DGLModel):
         grus = _get_clones(gru, self.iter)
         return grus
 
-    def _rand_gru_hidden(self, B):
+    def _init_gru_hidden(self, B):
         """Random initialize the GRU hidden state."""
         # init forward and reverse hidden states are the same
         rand_vec = torch.randn((1, B, self.pc_feat_dim)).repeat(2, 1, 1)
         zero_vec = torch.randn((2, B, self.pc_feat_dim))
         init_hidden = torch.cat([rand_vec, zero_vec], dim=-1)
         return init_hidden
+
+    def _run_gru(self, part_feats, messages, valids, iter_ind):
+        """Run GRU over part features and GNN node messahes."""
+        B = part_feats.shape[0]
+        gru_inputs = torch.cat([part_feats, messages], dim=-1)  # B x P x 2F
+        init_hidden = self._init_gru_hidden(B).type_as(messages)  # 2 x B x 2F
+        gru_outputs, _ = self.grus[iter_ind](
+            gru_inputs,
+            init_hidden,
+            valids=valids,
+        )  # B x P x 4F
+        return gru_outputs
 
     def forward(self, data_dict):
         """Forward pass to predict poses for each part.
@@ -86,55 +92,47 @@ class RGLNet(DGLModel):
             part_feats = self._extract_part_feats(part_pcs, part_valids)
         local_feats = part_feats
 
-        valid_matrix = data_dict['valid_matrix']
+        # initialize a fully connected graph
+        valid_matrix = data_dict['valid_matrix']  # 1 indicates valid relation
         part_label = data_dict['part_label'].type_as(part_feats)
         instance_label = data_dict['instance_label'].type_as(part_feats)
         B, P = instance_label.shape[:2]
-        # initialize identity poses
+        # init pose as identity
         pred_pose = torch.zeros((B, P, 7)).type_as(part_feats).detach()
         pred_pose[..., 0] = 1.
 
+        # construct same_class_list for GNN node aggregation/separation
+        class_list = self._gather_same_class(data_dict)
+
         all_pred_quat, all_pred_trans = [], []
         for iter_ind in range(self.iter):
-            # compute weights between pairs of parts
+            # adjust relations
             if iter_ind >= 1:
                 pose_feats = self.pose_extractor(pred_pose)  # B x P x F
-                pose_feat1 = pose_feats.unsqueeze(2).repeat(1, 1, P, 1)
-                pose_feat2 = pose_feats.unsqueeze(1).repeat(1, P, 1, 1)
-                input_relation = torch.cat([pose_feat1, pose_feat2], dim=-1)
-                edge_weights = self.relation_predictor(
-                    input_relation.view(B, P * P, -1)).view(B, P, P)
-            else:
-                edge_weights = torch.ones((B, P, P)).type_as(part_feats)
-            # masked out padded parts
-            edge_weights = edge_weights.masked_fill(valid_matrix == 0,
-                                                    float('-inf'))
-            edge_weights = F.softmax(edge_weights, dim=-1)  # B x P x P
-            # avoid nan
-            edge_weights = edge_weights.masked_fill(valid_matrix == 0, 0.)
+                # merge features of parts in the same class
+                if self.merge_node and self.semantic and iter_ind % 2 == 1:
+                    part_feats_copy, pose_feats_copy = self._merge_nodes(
+                        part_feats, pose_feats, class_list)
+                else:
+                    part_feats_copy = part_feats
+                    pose_feats_copy = pose_feats
 
-            # GNN nodes pairwise interaction
-            part_feat1 = part_feats.unsqueeze(2).repeat(1, 1, P, 1)
-            part_feat2 = part_feats.unsqueeze(1).repeat(1, P, 1, 1)
-            pairwise_feats = torch.cat([part_feat1, part_feat2], dim=-1)
-            part_relation = \
-                self.edge_mlps[iter_ind](pairwise_feats.view(B * P, P, -1))
-            part_relation = part_relation.view(B, P, P, -1)  # B x P x P x F
+                # predict new graph relations
+                new_relation = self._update_relation(pose_feats_copy, iter_ind)
+                relation_matrix = new_relation * valid_matrix
+            # first iter, use fully-connected graph
+            else:  # iter_ind == 0
+                part_feats_copy = part_feats
+                relation_matrix = valid_matrix
 
-            # compute message as weighted sum over edge features, B x P x F
-            messages = (edge_weights.unsqueeze(-1) * part_relation).sum(2)
+            # perform message passing
+            messages = self._message_passing(part_feats_copy, relation_matrix,
+                                             iter_ind)
 
             # GRU progressive message passing
-            # TODO: pack part sequences to handle padded parts?
-            gru_inputs = \
-                torch.cat([part_feats, messages], dim=-1)  # B x P x 2F
-            init_hidden = \
-                self._rand_gru_hidden(B).type_as(gru_inputs)  # 2 x B x 2F
-            gru_outputs, _ = self.grus[iter_ind](
-                gru_inputs,
-                init_hidden,
-                valids=data_dict['part_valids'],
-            )  # B x P x 4F
+            gru_outputs = self._run_gru(part_feats, messages,
+                                        data_dict['part_valids'],
+                                        iter_ind)  # B x P x 4F
 
             # node feature update
             part_feats = self.node_mlps[iter_ind](gru_outputs)  # B x P x F
@@ -161,6 +159,6 @@ class RGLNet(DGLModel):
             'quat': pred_quat,  # [(T, )B, P, 4]
             'trans': pred_trans,  # [(T, )B, P, 3]
             'part_feats': local_feats,  # [B, P, C]
-            'class_list': None,  # keep for compatibility
+            'class_list': class_list,  # batch of list of list
         }
         return pred_dict
