@@ -39,7 +39,8 @@ class PNTransformerRefine(PNTransformer):
     def _init_corr_pos_enc(self):
         """Positional encoding for `corr_module`."""
         # as in DGL, we reuse the same PE for all refinement steps
-        pos_enc_dims = self.cfg.model.transformer_pos_enc
+        pos_enc_dims = list(self.cfg.model.transformer_pos_enc)
+        pos_enc_dims.insert(0, self.pose_dim)
         corr_pos_enc = PosEncoder(pos_enc_dims)
         return corr_pos_enc
 
@@ -60,7 +61,7 @@ class PNTransformerRefine(PNTransformer):
     def _init_pose_predictor(self):
         """Final pose estimator."""
         # concat feature, instance_label and noise as input
-        dim = self.pc_feat_dim + 7
+        dim = self.pc_feat_dim + self.pose_dim
         if self.semantic:  # instance_label in semantic assembly
             dim += self.max_num_part
         if self.pose_pc_feat:
@@ -70,6 +71,7 @@ class PNTransformerRefine(PNTransformer):
         pose_predictor = StocasticPoseRegressor(
             feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
+            rot_type=self.rot_type,
         )
         pose_predictors = _get_clones(pose_predictor, self.refine_steps)
         return pose_predictors
@@ -96,10 +98,10 @@ class PNTransformerRefine(PNTransformer):
         part_label = data_dict['part_label'].type_as(pc_feats)
         inst_label = data_dict['instance_label'].type_as(pc_feats)
         B, P, _ = inst_label.shape
-        pose = torch.cat([torch.ones(B, P, 1), torch.zeros(B, P, 6)], dim=-1)
-        pose = pose.type_as(pc_feats)
+        # init pose as identity
+        pose = self.zero_pose.repeat(B, P, 1).type_as(part_feats).detach()
 
-        pred_quat, pred_trans = [], []
+        pred_rot, pred_trans = [], []
         for i in range(self.refine_steps):
             # transformer feature fusion
             # positional encoding from predicted pose
@@ -114,24 +116,24 @@ class PNTransformerRefine(PNTransformer):
                               dim=-1)
             if self.pose_pc_feat:
                 feats = torch.cat([pc_feats, feats], dim=-1)
-            quat, trans = self.pose_predictor[i](feats)
-            pred_quat.append(quat)
+            rot, trans = self.pose_predictor[i](feats)
+            pred_rot.append(rot)
             pred_trans.append(trans)
 
             # update for next iteration
-            pose = torch.cat([quat, trans], dim=-1)
+            pose = torch.cat([rot, trans], dim=-1)
             part_feats = corr_feats
 
         if self.training:
-            pred_quat = torch.stack(pred_quat, dim=0)
+            pred_rot = self._wrap_rotation(torch.stack(pred_rot, dim=0))
             pred_trans = torch.stack(pred_trans, dim=0)
         else:
             # directly take the last step results
-            pred_quat = pred_quat[-1]
+            pred_rot = self._wrap_rotation(pred_rot[-1])
             pred_trans = pred_trans[-1]
 
         pred_dict = {
-            'quat': pred_quat,  # [(T, )B, P, 4]
+            'rot': pred_rot,  # [(T, )B, P, 4/(3, 3)], Rotation3D
             'trans': pred_trans,  # [(T, )B, P, 3]
             'pc_feats': pc_feats,  # [B, P, C]
         }
@@ -158,10 +160,10 @@ class PNTransformerRefine(PNTransformer):
             out_dict['pc_feats'] = pc_feats
             return loss_dict, out_dict
 
-        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
+        pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
         all_loss_dict = None
         for i in range(self.refine_steps):
-            pred_dict = {'quat': pred_quat[i], 'trans': pred_trans[i]}
+            pred_dict = {'rot': pred_rot[i], 'trans': pred_trans[i]}
             loss_dict, out_dict = self._calc_loss(pred_dict, data_dict)
             if all_loss_dict is None:
                 all_loss_dict = {k: 0. for k in loss_dict.keys()}

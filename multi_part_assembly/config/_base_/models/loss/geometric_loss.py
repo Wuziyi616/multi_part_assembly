@@ -19,7 +19,7 @@ _C.sample_iter = 1  # no need to do MoN loss sampling
 _C.trans_loss_w = 1.
 _C.rot_pt_cd_loss_w = 10.
 _C.transform_pt_cd_loss_w = 10.
-# cosine regression loss on quat
+# cosine regression loss on rotation
 _C.use_rot_loss = True
 _C.rot_loss_w = 0.2
 # per-point l2 loss between rotated part point clouds

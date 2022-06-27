@@ -4,7 +4,7 @@ import torch
 
 from .loss import _valid_mean
 from .chamfer import chamfer_distance
-from .transforms import qeuler, qtransform
+from .transforms import transform_pc
 
 
 @torch.no_grad()
@@ -34,14 +34,14 @@ def trans_metrics(trans1, trans2, valids, metric):
 
 
 @torch.no_grad()
-def rot_metrics(quat1, quat2, valids, metric):
+def rot_metrics(rot1, rot2, valids, metric):
     """Evaluation metrics for rotation in euler angle (degree) space.
 
     Metrics used in the NSM paper.
 
     Args:
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
         metric: str, 'mse', 'rmse' or 'mae'
 
@@ -49,8 +49,8 @@ def rot_metrics(quat1, quat2, valids, metric):
         [B], metric per data in the batch
     """
     assert metric in ['mse', 'rmse', 'mae']
-    deg1 = qeuler(quat1, order='zyx', to_degree=True)
-    deg2 = qeuler(quat2, order='zyx', to_degree=True)
+    deg1 = rot1.to_euler()
+    deg2 = rot2.to_euler()
     # since euler angle has the discontinuity at 180
     # -179 and +179 actually only has an error of 2 degree
     # convert -179 to 181
@@ -69,7 +69,7 @@ def rot_metrics(quat1, quat2, valids, metric):
 
 
 @torch.no_grad()
-def calc_part_acc(pts, trans1, trans2, quat1, quat2, valids):
+def calc_part_acc(pts, trans1, trans2, rot1, rot2, valids):
     """Compute the `Part Accuracy` in the paper.
 
     We compute the per-part chamfer distance, and the distance lower than a
@@ -79,17 +79,17 @@ def calc_part_acc(pts, trans1, trans2, quat1, quat2, valids):
         pts: [B, P, N, 3], model input point cloud to be transformed
         trans1: [B, P, 3]
         trans2: [B, P, 3]
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
 
     Returns:
         [B], accuracy per data in the batch
     """
-    B, P, N, _ = pts.shape
+    B, P = pts.shape[:2]
 
-    pts1 = qtransform(trans1, quat1, pts)  # [B, P, N, 3]
-    pts2 = qtransform(trans2, quat2, pts)
+    pts1 = transform_pc(trans1, rot1, pts)  # [B, P, N, 3]
+    pts2 = transform_pc(trans2, rot2, pts)
 
     pts1 = pts1.flatten(0, 1)  # [B*P, N, 3]
     pts2 = pts2.flatten(0, 1)
@@ -106,7 +106,7 @@ def calc_part_acc(pts, trans1, trans2, quat1, quat2, valids):
 
 
 @torch.no_grad()
-def calc_connectivity_acc(trans, quat, contact_points):
+def calc_connectivity_acc(trans, rot, contact_points):
     """Compute the `Connectivity Accuracy` in the paper.
 
     We transform pre-computed connected point pairs using predicted pose, then
@@ -115,7 +115,7 @@ def calc_connectivity_acc(trans, quat, contact_points):
 
     Args:
         trans: [B, P, 3]
-        quat: [B, P, 4]
+        rot: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         contact_points: [B, P, P, 4], pairwise contact matrix.
             First item is 1 --> two parts are connecting, 0 otherwise.
             Last three items are the contacting point coordinate.
@@ -126,12 +126,12 @@ def calc_connectivity_acc(trans, quat, contact_points):
     B, P, _ = trans.shape
     thre = 0.01
 
-    def get_min_l2_dist(points1, points2, trans1, trans2, quat1, quat2):
+    def get_min_l2_dist(points1, points2, trans1, trans2, rot1, rot2):
         """Compute the min L2 distance between two set of points."""
         # points1/2: [num_contact, num_symmetry, 3]
-        # trans/quat: [num_contact, 3/4]
-        points1 = qtransform(trans1, quat1, points1)
-        points2 = qtransform(trans2, quat2, points2)
+        # trans/rot: [num_contact, 3/4/(3, 3)]
+        points1 = transform_pc(trans1, rot1, points1)
+        points2 = transform_pc(trans2, rot2, points2)
         dist = ((points1[:, :, None] - points2[:, None, :])**2).sum(-1)
         return dist.min(-1)[0].min(-1)[0]  # [num_contact]
 
@@ -139,7 +139,7 @@ def calc_connectivity_acc(trans, quat, contact_points):
     mask = (contact_points[..., 0] == 1)  # [B, P, P]
     # points1 = contact_points[mask][..., 1:]
     # TODO: more efficient way of getting paired contact points?
-    points1, points2, trans1, trans2, quat1, quat2 = [], [], [], [], [], []
+    points1, points2, trans1, trans2, rot1, rot2 = [], [], [], [], [], []
     for b in range(B):
         for i in range(P):
             for j in range(P):
@@ -148,16 +148,16 @@ def calc_connectivity_acc(trans, quat, contact_points):
                     points2.append(contact_points[b, j, i, 1:])
                     trans1.append(trans[b, i])
                     trans2.append(trans[b, j])
-                    quat1.append(quat[b, i])
-                    quat2.append(quat[b, j])
+                    rot1.append(rot[b, i])
+                    rot2.append(rot[b, j])
     points1 = torch.stack(points1, dim=0)  # [n, 3]
     points2 = torch.stack(points2, dim=0)  # [n, 3]
-    # [n, 3/4], corresponding translation and rotation
+    # [n, 3/4/(3, 3)], corresponding translation and rotation
     trans1, trans2 = torch.stack(trans1, dim=0), torch.stack(trans2, dim=0)
-    quat1, quat2 = torch.stack(quat1, dim=0), torch.stack(quat2, dim=0)
+    rot1, rot2 = torch.stack(rot1, dim=0), torch.stack(rot2, dim=0)
     points1 = torch.stack(get_sym_point_list(points1), dim=1)  # [n, sym, 3]
     points2 = torch.stack(get_sym_point_list(points2), dim=1)  # [n, sym, 3]
-    dist = get_min_l2_dist(points1, points2, trans1, trans2, quat1, quat2)
+    dist = get_min_l2_dist(points1, points2, trans1, trans2, rot1, rot2)
     acc = (dist < thre).sum().float() / float(dist.numel())
 
     # the official code is doing avg per-contact_point acc (not per-shape)

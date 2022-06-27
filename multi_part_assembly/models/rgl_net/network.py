@@ -2,7 +2,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from multi_part_assembly.utils import _get_clones
 from multi_part_assembly.models import DGLModel, RNNWrapper
@@ -98,13 +97,12 @@ class RGLNet(DGLModel):
         instance_label = data_dict['instance_label'].type_as(part_feats)
         B, P = instance_label.shape[:2]
         # init pose as identity
-        pred_pose = torch.zeros((B, P, 7)).type_as(part_feats).detach()
-        pred_pose[..., 0] = 1.
+        pred_pose = self.zero_pose.repeat(B, P, 1).type_as(part_feats).detach()
 
         # construct same_class_list for GNN node aggregation/separation
         class_list = self._gather_same_class(data_dict)
 
-        all_pred_quat, all_pred_trans = [], []
+        all_pred_rot, all_pred_trans = [], []
         for iter_ind in range(self.iter):
             # adjust relations
             if iter_ind >= 1:
@@ -140,23 +138,23 @@ class RGLNet(DGLModel):
             # pose prediction
             pose_feats = torch.cat(
                 [part_feats, part_label, instance_label, pred_pose], dim=-1)
-            pred_quat, pred_trans = self.pose_predictors[iter_ind](pose_feats)
-            pred_pose = torch.cat([pred_quat, pred_trans], dim=-1)
+            pred_rot, pred_trans = self.pose_predictors[iter_ind](pose_feats)
+            pred_pose = torch.cat([pred_rot, pred_trans], dim=-1)
 
             # save poses
-            all_pred_quat.append(pred_quat)
+            all_pred_rot.append(pred_rot)
             all_pred_trans.append(pred_trans)
 
         if self.training:
-            pred_quat = torch.stack(all_pred_quat, dim=0)
+            pred_rot = self._wrap_rotation(torch.stack(all_pred_rot, dim=0))
             pred_trans = torch.stack(all_pred_trans, dim=0)
         else:
             # directly take the last step results
-            pred_quat = all_pred_quat[-1]
+            pred_rot = self._wrap_rotation(all_pred_rot[-1])
             pred_trans = all_pred_trans[-1]
 
         pred_dict = {
-            'quat': pred_quat,  # [(T, )B, P, 4]
+            'rot': pred_rot,  # [(T, )B, P, 4/(3, 3)], Rotation3D
             'trans': pred_trans,  # [(T, )B, P, 3]
             'part_feats': local_feats,  # [B, P, C]
             'class_list': class_list,  # batch of list of list

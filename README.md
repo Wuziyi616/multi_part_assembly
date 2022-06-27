@@ -179,4 +179,7 @@ It will save the original meshes, input meshes after random transformation and m
 
 ## Misc.
 
--   We use real part first (w, x, y, z) quaternion in this codebase following [PyTorch3D](https://pytorch3d.org/), while `scipy` use real part last format. Please be careful when using the code.
+-   We use real part first (w, x, y, z) quaternion in this codebase following [PyTorch3D](https://pytorch3d.org/), while `scipy` use real part last format. Please be careful when using the code
+-   For ease of data batching, we always represent rotations as quaternions from the dataloaders. However, for model output, we wrap the predicted rotations in a `Rotation3D` class, which supports common format conversion and tensor operations. See `multi_part_assembly/utils/transforms.py` for detailed definition of it
+-   Other rotation representation we support:
+    -   6D representation: see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html). The predicted `6`-len tensor will be viewed to `(2, 3)`, and the final row is obtained via cross product

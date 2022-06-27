@@ -47,6 +47,7 @@ class LSTMModel(BaseModel):
         pose_predictor = StocasticPoseRegressor(
             feat_dim=dim,
             noise_dim=self.cfg.loss.noise_dim,
+            rot_type=self.rot_type,
         )
         return pose_predictor
 
@@ -94,10 +95,11 @@ class LSTMModel(BaseModel):
         part_label = data_dict['part_label'].type_as(part_feats)
         inst_label = data_dict['instance_label'].type_as(part_feats)
         feats = torch.cat([output_seq, part_label, inst_label], dim=-1)
-        quat, trans = self.pose_predictor(feats)
+        rot, trans = self.pose_predictor(feats)
+        rot = self._wrap_rotation(rot)
 
         pred_dict = {
-            'quat': quat,  # [B, P, 4]
+            'rot': rot,  # [B, P, 4/(3, 3)], Rotation3D
             'trans': trans,  # [B, P, 3]
             'part_feats': part_feats,  # [B, P, C']
         }

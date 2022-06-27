@@ -15,9 +15,9 @@ def build_encoder(arch, feat_dim, global_feat=True, **kwargs):
         elif 'msg' in arch:
             model = PointNet2MSG(feat_dim)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f'{arch} not supported!')
     elif arch == 'vn-pointnet':
         model = VNPointNet(feat_dim, global_feat=global_feat, **kwargs)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'{arch} is not supported!')
     return model

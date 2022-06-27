@@ -33,19 +33,20 @@ def visualize(cfg):
     vis_lst, loss_lst = [], []
     for batch in tqdm(val_loader):
         batch = {k: v.float().cuda() for k, v in batch.items()}
-        out_dict = model(batch)  # trans/quat: [B, P, 3/4]
+        out_dict = model(batch)  # trans/rot: [B, P, 3/4/(3, 3)]
         loss_dict, _ = model.module._calc_loss(out_dict, batch)  # loss is [B]
         # TODO: the criterion to select examples
         # loss = -loss_dict['part_acc']
         # loss = loss_dict['trans_mae'] + loss_dict['rot_mae'] / 1000.
         # loss = loss_dict['transform_pt_cd_loss']
         loss = loss_dict['rot_pt_l2_loss'] + loss_dict['trans_mae']
+        # convert all the rotations to quaternion for simplicity
         out_dict = {
             'data_id': batch['data_id'].long(),
             'pred_trans': out_dict['trans'],
-            'pred_quat': out_dict['quat'],
+            'pred_quat': out_dict['rot'].to_quat(),
             'gt_trans': batch['part_trans'],
-            'gt_quat': batch['part_quat'],
+            'gt_quat': batch['part_rot'].to_quat(),
             'part_valids': batch['part_valids'].long(),
         }
         out_dict = {k: v.cpu().numpy() for k, v in out_dict.items()}

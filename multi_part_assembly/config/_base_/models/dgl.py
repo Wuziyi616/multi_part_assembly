@@ -4,6 +4,7 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 _C.name = 'dgl'
+_C.rot_type = 'quat'
 _C.encoder = 'pointnet'  # 'dgcnn', 'pointnet2_ssg', 'pointnet2_msg'
 _C.pc_feat_dim = 128
 # GNN refinement iteration

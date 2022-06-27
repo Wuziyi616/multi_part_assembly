@@ -1,6 +1,6 @@
 import torch
 
-from .transforms import qrot, qtransform
+from .transforms import rot_pc, transform_pc
 from .chamfer import chamfer_distance
 
 
@@ -35,17 +35,19 @@ def trans_l2_loss(trans1, trans2, valids):
     return loss_per_data
 
 
-def rot_l2_loss(quat1, quat2, valids):
+def rot_l2_loss(rot1, rot2, valids):
     """L2 loss for rotation.
 
     Args:
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4], Rotation3D, should be quat
+        rot2: [B, P, 4], Rotation3D, should be quat
         valids: [B, P], 1 for input parts, 0 for padded parts
 
     Returns:
         [B], loss per data in the batch
     """
+    assert rot1.rot_type == rot2.rot_type == 'quat'
+    quat1, quat2 = rot1.rot, rot2.rot
     # since quat == -quat
     rot_l2_1 = (quat1 - quat2).pow(2).sum(dim=-1)  # [B, P]
     rot_l2_2 = (quat1 + quat2).pow(2).sum(dim=-1)
@@ -54,38 +56,51 @@ def rot_l2_loss(quat1, quat2, valids):
     return loss_per_data
 
 
-def rot_cosine_loss(quat1, quat2, valids):
+def rot_cosine_loss(rot1, rot2, valids):
     """Cosine loss for rotation.
 
     Args:
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
 
     Returns:
         [B], loss per data in the batch
     """
-    # since quat == -quat
-    loss_per_data = 1. - torch.abs(torch.sum(quat1 * quat2, dim=-1))  # [B, P]
+    assert rot1.rot_type == rot2.rot_type
+    rot_type = rot1.rot_type
+    # cosine distance
+    if rot_type == 'quat':
+        quat1, quat2 = rot1.rot, rot2.rot
+        loss_per_data = 1. - torch.abs(torch.sum(quat1 * quat2, dim=-1))
+    # |I - R1^T @ R2|^2
+    elif rot_type == 'rmat':
+        B = rot1.shape[0]
+        rmat1, rmat2 = rot1.rot.view(-1, 3, 3), rot2.rot.view(-1, 3, 3)
+        identity = torch.eye(3).unsqueeze(0).type_as(rmat1)
+        loss_per_data = (identity - torch.bmm(rmat1.transpose(1, 2), rmat2)).\
+            pow(2).sum(dim=[-1, -2]).view(B, -1)
+    else:
+        raise NotImplementedError(f'cosine loss not supported for {rot_type}!')
     loss_per_data = _valid_mean(loss_per_data, valids)
     return loss_per_data
 
 
-def rot_points_l2_loss(pts, quat1, quat2, valids, ret_pts=False):
-    """L2 distance between point clouds transformed by quats.
+def rot_points_l2_loss(pts, rot1, rot2, valids, ret_pts=False):
+    """L2 distance between point clouds transformed by rotations.
 
     Args:
         pts: [B, P, N, 3], model input point cloud to be transformed
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
         ret_pts: whether to return the rotated point clouds
 
     Returns:
         [B], loss per data in the batch
     """
-    pts1 = qrot(quat1, pts)
-    pts2 = qrot(quat2, pts)
+    pts1 = rot_pc(rot1, pts)
+    pts2 = rot_pc(rot2, pts)
 
     loss_per_data = (pts1 - pts2).pow(2).sum(-1).mean(-1)  # [B, P]
     loss_per_data = _valid_mean(loss_per_data, valids)
@@ -95,27 +110,27 @@ def rot_points_l2_loss(pts, quat1, quat2, valids, ret_pts=False):
     return loss_per_data
 
 
-def rot_points_cd_loss(pts, quat1, quat2, valids, ret_pts=False):
-    """Chamfer distance between point clouds transformed by quats.
+def rot_points_cd_loss(pts, rot1, rot2, valids, ret_pts=False):
+    """Chamfer distance between point clouds transformed by rotations.
 
     Args:
         pts: [B, P, N, 3], model input point cloud to be transformed
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
         ret_pts: whether to return the rotated point clouds
 
     Returns:
         [B], loss per data in the batch
     """
-    batch_size = pts.shape[0]
+    B = pts.shape[0]
 
-    pts1 = qrot(quat1, pts)
-    pts2 = qrot(quat2, pts)
+    pts1 = rot_pc(rot1, pts)
+    pts2 = rot_pc(rot2, pts)
 
     dist1, dist2 = chamfer_distance(pts1.flatten(0, 1), pts2.flatten(0, 1))
     loss_per_data = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)
-    loss_per_data = loss_per_data.view(batch_size, -1).type_as(pts)  # [B, P]
+    loss_per_data = loss_per_data.view(B, -1).type_as(pts)  # [B, P]
     loss_per_data = _valid_mean(loss_per_data, valids)
 
     if ret_pts:
@@ -123,26 +138,25 @@ def rot_points_cd_loss(pts, quat1, quat2, valids, ret_pts=False):
     return loss_per_data
 
 
-def shape_cd_loss(pts, trans1, trans2, quat1, quat2, valids, ret_pts=False):
+def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
     """Chamfer distance between point clouds after rotation and translation.
 
     Args:
         pts: [B, P, N, 3], model input point cloud to be transformed
         trans1: [B, P, 3]
         trans2: [B, P, 3]
-        quat1: [B, P, 4]
-        quat2: [B, P, 4]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
         ret_pts: whether to return the transformed point clouds
 
     Returns:
         [B], loss per data in the batch
     """
-    batch_size = pts.shape[0]
-    num_points = pts.shape[2]
+    B, _, N, _ = pts.shape
 
-    pts1 = qtransform(trans1, quat1, pts)
-    pts2 = qtransform(trans2, quat2, pts)
+    pts1 = transform_pc(trans1, rot1, pts)
+    pts2 = transform_pc(trans2, rot2, pts)
 
     shape1 = pts1.flatten(1, 2)  # [B, P*N, 3]
     shape2 = pts2.flatten(1, 2)
@@ -151,7 +165,7 @@ def shape_cd_loss(pts, trans1, trans2, quat1, quat2, valids, ret_pts=False):
     dist1, dist2 = chamfer_distance(shape1, shape2)  # [B, P*N]
 
     valids = valids.float().detach()
-    valids = valids.unsqueeze(2).repeat(1, 1, num_points).view(batch_size, -1)
+    valids = valids.unsqueeze(2).repeat(1, 1, N).view(B, -1)
     dist1 = dist1 * valids
     dist2 = dist2 * valids
     # TODO: should use `_valid_mean` instead of directly taking mean?

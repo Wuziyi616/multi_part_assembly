@@ -17,13 +17,17 @@ from scipy.spatial.transform import Rotation as R
 
 import torch
 
-from pytorch3d.transforms import quaternion_to_matrix, matrix_to_quaternion, \
-    quaternion_to_axis_angle, matrix_to_axis_angle, \
+from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
+    quaternion_to_matrix, quaternion_to_axis_angle, \
     axis_angle_to_quaternion, axis_angle_to_matrix
 
 
 class Rotation3D:
-    """Class for different formats of 3D rotation."""
+    """Class for different formats of 3D rotation, enabling easy conversion.
+
+    Supports common properties of torch.Tensor, e.g. device, dtype.
+    Also support indexing and slicing the first dim.
+    """
 
     ROT_TYPE = ['quat', 'rmat', 'axis']
     ROT_NAME = {
@@ -49,7 +53,8 @@ class Rotation3D:
         elif self._rot_type == 'axis':
             assert self._rot.shape[-1] == 3
 
-    def to_rot(self, rot_type):
+    def convert(self, rot_type):
+        """Convert to a different rotation type."""
         assert rot_type in self.ROT_TYPE
         src_type = self.ROT_NAME[self._rot_type]
         dst_type = self.ROT_NAME[rot_type]
@@ -57,6 +62,23 @@ class Rotation3D:
             return self.clone()
         new_rot = eval(f'{src_type}_to_{dst_type}')(self._rot)
         return Rotation3D(new_rot, rot_type)
+
+    def to_quat(self):
+        """Convert to quaternion and return the tensor."""
+        return self.convert('quat').rot
+
+    def to_rmat(self):
+        """Convert to rotation matrix and return the tensor."""
+        return self.convert('rmat').rot
+
+    def to_axis_angle(self):
+        """Convert to axis angle and return the tensor."""
+        return self.convert('axis').rot
+
+    def to_euler(self, order='zyx', to_degree=True):
+        """Compute to euler angles and return the tensor."""
+        quat = self.convert('quat')
+        return qeuler(quat._rot, order=order, to_degree=to_degree)
 
     @property
     def rot(self):
@@ -71,9 +93,62 @@ class Rotation3D:
     def rot_type(self):
         return self._rot_type
 
+    @property
+    def shape(self):
+        return self._rot.shape
+
+    @staticmethod
+    def cat(rot_lst, dim=0):
+        """Concat a list a Rotation3D object."""
+        assert isinstance(rot_lst, (list, tuple))
+        assert all([isinstance(rot, Rotation3D) for rot in rot_lst])
+        rot_type = rot_lst[0].rot_type
+        assert all([rot.rot_type == rot_type for rot in rot_lst])
+        rot_lst = [rot.rot for rot in rot_lst]
+        return Rotation3D(torch.cat(rot_lst, dim=dim), rot_type)
+
+    @staticmethod
+    def stack(rot_lst, dim=0):
+        """Stack a list of Rotation3D object."""
+        assert isinstance(rot_lst, (list, tuple))
+        assert all([isinstance(rot, Rotation3D) for rot in rot_lst])
+        rot_type = rot_lst[0].rot_type
+        assert all([rot.rot_type == rot_type for rot in rot_lst])
+        rot_lst = [rot.rot for rot in rot_lst]
+        return Rotation3D(torch.stack(rot_lst, dim=dim), rot_type)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            # Get the start, stop, and step from the slice
+            return self.stack([self[i] for i in range(len(self))[key]], dim=0)
+        elif isinstance(key, int):
+            if key < 0:  # handle negative indices
+                key += len(self)
+            if key < 0 or key >= len(self):
+                raise IndexError(f'Index {key} out of range')
+            rot = self.rot[key]
+            return Rotation3D(rot, self._rot_type)
+        else:
+            raise TypeError(f'Invalid argument type {type(key)}')
+
+    def __len__(self):
+        return self._rot.shape[0]
+
+    @property
+    def device(self):
+        return self._rot.device
+
     def to(self, device):
         self._rot = self._rot.to(device)
         return self
+
+    def cuda(self, device=None):
+        self._rot = self._rot.cuda(device)
+        return self
+
+    @property
+    def dtype(self):
+        return self._rot.dtype
 
     def type(self, dtype):
         self._rot = self._rot.type(dtype)
@@ -81,6 +156,10 @@ class Rotation3D:
 
     def type_as(self, other):
         self._rot = self._rot.type_as(other)
+        return self
+
+    def detach(self):
+        self._rot = self._rot.detach()
         return self
 
     def clone(self):
@@ -360,32 +439,50 @@ def rmat_transform(t, r, v):
 # wrapper on arbitrary 3D rotation format
 
 
-def rot_pc(rot, pc):
+def rot_pc(rot, pc, rot_type=None):
     """Rotate the 3D point cloud.
 
+    If `rot_type` is specified, `rot` is torch.Tensor. Otherwise, it is a
+        Rotation object and the type will be inferred from it.
+
     Args:
-        rot (Rotation3D): quat and rmat are supported now.
+        rot (Rotation3D or torch.Tensor): quat and rmat are supported now.
     """
-    if rot.rot_type == 'quat':
-        return qrot(rot.rot, pc)
-    elif rot.rot_type == 'rmat':
-        return rmat_rot(rot.rot, pc)
+    if rot_type is None:
+        assert isinstance(rot, Rotation3D)
+        rot = rot.rot
+        rot_type = rot.rot_type
+    else:
+        assert isinstance(rot, torch.Tensor)
+    if rot_type == 'quat':
+        return qrot(rot, pc)
+    elif rot_type == 'rmat':
+        return rmat_rot(rot, pc)
     else:
         raise NotImplementedError(f'{rot.rot_type} is not supported!')
 
 
-def transform_pc(trans, rot, pc):
+def transform_pc(trans, rot, pc, rot_type=None):
     """Rotate and translate the 3D point cloud.
 
+    If `rot_type` is specified, `rot` is torch.Tensor. Otherwise, it is a
+        Rotation object and the type will be inferred from it.
+
     Args:
-        rot (Rotation3D): quat and rmat are supported now.
+        rot (Rotation3D or torch.Tensor): quat and rmat are supported now.
     """
-    if rot.rot_type == 'quat':
-        return qtransform(trans, rot.rot, pc)
-    elif rot.rot_type == 'rmat':
-        return rmat_transform(trans, rot.rot, pc)
+    if rot_type is None:
+        assert isinstance(rot, Rotation3D)
+        rot = rot.rot
+        rot_type = rot.rot_type
     else:
-        raise NotImplementedError(f'{rot.rot_type} is not supported!')
+        assert isinstance(rot, torch.Tensor)
+    if rot_type == 'quat':
+        return qtransform(trans, rot, pc)
+    elif rot_type == 'rmat':
+        return rmat_transform(trans, rot, pc)
+    else:
+        raise NotImplementedError(f'{rot_type} is not supported!')
 
 
 # Numpy-backed implementations

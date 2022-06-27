@@ -4,10 +4,18 @@ import torch.nn.functional as F
 
 
 class PoseRegressor(nn.Module):
-    """MLP-based regressor for translation and quaterion prediction."""
+    """MLP-based regressor for translation and rotation prediction."""
 
-    def __init__(self, feat_dim):
+    def __init__(self, feat_dim, rot_type='quat'):
         super().__init__()
+
+        if rot_type == 'quat':
+            rot_dim = 4
+        elif rot_type == 'rmat':
+            rot_dim = 6  # 6D representation from the CVPR'19 paper
+        else:
+            raise NotImplementedError(f'rotation {rot_type} is not supported!')
+        self.rot_type = rot_type
 
         self.fc_layers = nn.Sequential(
             nn.Linear(feat_dim, 256),
@@ -17,7 +25,7 @@ class PoseRegressor(nn.Module):
         )
 
         # Rotation prediction head
-        self.rot_head = nn.Linear(128, 4)
+        self.rot_head = nn.Linear(128, rot_dim)
 
         # Translation prediction head
         self.trans_head = nn.Linear(128, 3)
@@ -26,17 +34,24 @@ class PoseRegressor(nn.Module):
         """x: [B, C] or [B, P, C]"""
         view_shape = list(x.shape[:-1]) + [-1]
         f = self.fc_layers(x.view(-1, x.shape[-1])).view(view_shape)
-        quat = self.rot_head(f)  # [B, 4] or [B, P, 4]
-        quat = F.normalize(quat, p=2, dim=-1)
+        rot = self.rot_head(f)  # [B, 4/6] or [B, P, 4/6]
+        if self.rot_type == 'quat':
+            rot = F.normalize(rot, p=2, dim=-1)
+        elif self.rot_type == 'rmat':
+            rot = torch.cat([
+                F.normalize(rot[..., :3], p=2, dim=-1),
+                F.normalize(rot[..., 3:], p=2, dim=-1),
+            ],
+                            dim=-1)
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]
-        return quat, trans
+        return rot, trans
 
 
 class StocasticPoseRegressor(PoseRegressor):
     """Stochastic pose regressor with noise injection."""
 
-    def __init__(self, feat_dim, noise_dim):
-        super().__init__(feat_dim + noise_dim)
+    def __init__(self, feat_dim, noise_dim, rot_type='quat'):
+        super().__init__(feat_dim + noise_dim, rot_type)
 
         self.noise_dim = noise_dim
 

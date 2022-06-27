@@ -75,9 +75,9 @@ class RelationNet(nn.Module):
 
 class PoseEncoder(nn.Module):
 
-    def __init__(self):
+    def __init__(self, pose_dim):
         super().__init__()
-        self.mlp1 = nn.Linear(7, 256)
+        self.mlp1 = nn.Linear(pose_dim, 256)
         self.mlp2 = nn.Linear(256, 128)
 
     def forward(self, x):

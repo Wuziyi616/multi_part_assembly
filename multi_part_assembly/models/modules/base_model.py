@@ -5,11 +5,12 @@ import pytorch_lightning as pl
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from multi_part_assembly.utils import qtransform, chamfer_distance
+from multi_part_assembly.utils import transform_pc, Rotation3D
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, rot_cosine_loss, rot_points_l2_loss
+    shape_cd_loss, rot_cosine_loss, rot_points_l2_loss
+from multi_part_assembly.utils import calc_part_acc, calc_connectivity_acc, \
+    trans_metrics, rot_metrics, chamfer_distance
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -21,10 +22,33 @@ class BaseModel(pl.LightningModule):
 
         self.cfg = cfg
 
-        self.semantic = (cfg.data.dataset != 'geometry')
+        self._setup()
+
+    def _setup(self):
+        # basic setting
+        self.rot_type = self.cfg.model.rot_type
+        if self.rot_type == 'quat':
+            self.pose_dim = 3 + 4
+            zero_pose = torch.zeros(1, 1, self.pose_dim)
+            zero_pose[..., 0] = 1.
+            self.zero_pose = zero_pose
+        elif self.rot_type == 'rmat':
+            self.pose_dim = 3 + 6
+            zero_pose = torch.zeros(1, 1, self.pose_dim)
+            zero_pose[..., 0] = 1.
+            zero_pose[..., 4] = 1.
+            self.zero_pose = zero_pose
+        else:
+            raise NotImplementedError(
+                f'rotation {self.rot_type} is not supported!')
+
+        # data related
+        self.semantic = (self.cfg.data.dataset != 'geometry')
         self.max_num_part = self.cfg.data.max_num_part
+
+        # model related
         self.pc_feat_dim = self.cfg.model.pc_feat_dim
-        self.use_part_label = 'part_label' in cfg.data.data_keys
+        self.use_part_label = 'part_label' in self.cfg.data.data_keys
 
         # loss configs
         self.sample_iter = self.cfg.loss.sample_iter
@@ -86,8 +110,8 @@ class BaseModel(pl.LightningModule):
         data_dict = {
             'part_pcs': [B, P, N, 3],
             'part_trans': [B, P, 3],
-            'part_quat': [B, P, 4],
-            'part_valids': [B, P], 1 for valid, 0 for padded,
+            'part_quat': [B, P, 4],  # will be replaced to `part_rot`
+            'part_valids': [B, P],  # 1 for valid, 0 for padded,
             'shape_id': int,
             'part_ids': [B, P],
             'instance_label': [B, P, P],
@@ -96,6 +120,11 @@ class BaseModel(pl.LightningModule):
             'sym': [B, P, 3],
         }
         """
+        # wrap the GT rotation in a Rotation3D object
+        part_quat = data_dict.pop('part_quat')
+        data_dict['part_rot'] = \
+            Rotation3D(part_quat, rot_type='quat').convert(self.rot_type)
+
         loss_dict = self.loss_function(data_dict, optimizer_idx=optimizer_idx)
 
         # in training we log for every step
@@ -112,13 +141,13 @@ class BaseModel(pl.LightningModule):
         return loss_dict
 
     @torch.no_grad()
-    def _linear_sum_assignment(self, pts, trans1, quat1, trans2, quat2):
+    def _linear_sum_assignment(self, pts, trans1, rot1, trans2, rot2):
         """Find the min-cose match between two groups of poses.
 
         Args:
             pts: [p, N, 3]
             trans1/2: [p, 3]
-            quat1/2: [p, 4]
+            rot1/2: [p, 4/(3, 3)], torch.Tensor, quat or rmat
 
         Returns:
             torch.Tensor x2: [p], [p], matching index
@@ -129,8 +158,8 @@ class BaseModel(pl.LightningModule):
         sample_idx = torch.randperm(N)[:n].to(pts.device).long()
         pts = pts[:, sample_idx]  # [p, n, 3]
 
-        pts1 = qtransform(trans1, quat1, pts)
-        pts2 = qtransform(trans2, quat2, pts)
+        pts1 = transform_pc(trans1, rot1, pts, self.rot_type)
+        pts2 = transform_pc(trans2, rot2, pts, self.rot_type)
 
         pts1 = pts1.unsqueeze(1).repeat(1, p, 1, 1).view(-1, n, 3)
         pts2 = pts2.unsqueeze(0).repeat(p, 1, 1, 1).view(-1, n, 3)
@@ -143,14 +172,14 @@ class BaseModel(pl.LightningModule):
         return rind, cind
 
     @torch.no_grad()
-    def _match_parts(self, part_pcs, pred_trans, pred_quat, gt_trans, gt_quat,
+    def _match_parts(self, part_pcs, pred_trans, pred_rot, gt_trans, gt_rot,
                      match_ids):
         """Match GT to predctions.
 
         Args:
             part_pcs: [B, P, N, 3]
             pred/gt_trans: [B, P, 3]
-            pred/gt_quat: [B, P, 4]
+            pred/gt_rot: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
             match_ids: [B, P], indicator of equivalent parts in the shape, e.g.
                 [0, 1, 1, 0, 2, 2, 2, 0, 0], where 0 are padded or unique part,
                 two `1` are one group, three `2` are another group of parts.
@@ -162,7 +191,11 @@ class BaseModel(pl.LightningModule):
         match_ids = match_ids.long()
         # gt to be modified
         new_gt_trans = gt_trans.detach().clone()
-        new_gt_quat = gt_quat.detach().clone()
+        new_gt_rot = gt_rot.detach().clone()
+        # we directly operate on torch.Tensor rotation for simplicity
+        gt_rot_tensor = gt_rot.rot
+        pred_rot_tensor = pred_rot.rot
+        new_gt_rot_tensor = new_gt_rot.rot
 
         # iterate over batch
         for ind in range(part_pcs.shape[0]):
@@ -180,52 +213,53 @@ class BaseModel(pl.LightningModule):
                 # extract group data and perform matching
                 cur_pts = part_pcs[ind, need_to_match_part]
                 cur_pred_trans = pred_trans[ind, need_to_match_part]
-                cur_pred_quat = pred_quat[ind, need_to_match_part]
+                cur_pred_rot = pred_rot_tensor[ind, need_to_match_part]
                 cur_gt_trans = gt_trans[ind, need_to_match_part]
-                cur_gt_quat = gt_quat[ind, need_to_match_part]
+                cur_gt_rot = new_gt_rot_tensor[ind, need_to_match_part]
 
                 _, matched_gt_ids = self._linear_sum_assignment(
-                    cur_pts, cur_pred_trans, cur_pred_quat, cur_gt_trans,
-                    cur_gt_quat)
+                    cur_pts, cur_pred_trans, cur_pred_rot, cur_gt_trans,
+                    cur_gt_rot)
 
                 # since row_idx is sorted, we can directly rearrange GT
                 new_gt_trans[ind, need_to_match_part] = \
                     gt_trans[ind, need_to_match_part][matched_gt_ids]
-                new_gt_quat[ind, need_to_match_part] = \
-                    gt_quat[ind, need_to_match_part][matched_gt_ids]
+                new_gt_rot_tensor[ind, need_to_match_part] = \
+                    gt_rot_tensor[ind, need_to_match_part][matched_gt_ids]
 
-        return new_gt_trans, new_gt_quat
+        new_gt_rot = self._wrap_rotation(new_gt_rot_tensor)
+        return new_gt_trans, new_gt_rot
 
     def _calc_loss(self, out_dict, data_dict):
         """Calculate loss by matching GT to prediction.
 
         Also compute evaluation metrics during testing.
         """
-        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
+        pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
 
         # matching GT with predictions for lowest loss in semantic assembly
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        gt_trans, gt_rot = data_dict['part_trans'], data_dict['part_rot']
         if self.semantic:
             match_ids = data_dict['match_ids']
-            new_trans, new_quat = self._match_parts(part_pcs, pred_trans,
-                                                    pred_quat, gt_trans,
-                                                    gt_quat, match_ids)
+            new_trans, new_rot = self._match_parts(part_pcs, pred_trans,
+                                                   pred_rot, gt_trans, gt_rot,
+                                                   match_ids)
         else:
             new_trans = gt_trans.detach().clone()
-            new_quat = gt_quat.detach().clone()
+            new_rot = gt_rot.detach().clone()
 
         # computing loss
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
-        rot_pt_cd_loss = rot_points_cd_loss(part_pcs, pred_quat, new_quat,
+        rot_pt_cd_loss = rot_points_cd_loss(part_pcs, pred_rot, new_rot,
                                             valids)
         transform_pt_cd_loss, gt_trans_pts, pred_trans_pts = \
             shape_cd_loss(
                 part_pcs,
                 pred_trans,
                 new_trans,
-                pred_quat,
-                new_quat,
+                pred_rot,
+                new_rot,
                 valids,
                 ret_pts=True)
         loss_dict = {
@@ -234,35 +268,34 @@ class BaseModel(pl.LightningModule):
             'transform_pt_cd_loss': transform_pt_cd_loss,
         }  # all loss are of shape [B]
 
-        # cosine regression loss on quat
+        # cosine regression loss on rotation
         if self.cfg.loss.use_rot_loss:
-            loss_dict['rot_loss'] = rot_cosine_loss(pred_quat, new_quat,
-                                                    valids)
+            loss_dict['rot_loss'] = rot_cosine_loss(pred_rot, new_rot, valids)
         # per-point l2 loss between rotated part point clouds
         if self.cfg.loss.use_rot_pt_l2_loss:
             loss_dict['rot_pt_l2_loss'] = rot_points_l2_loss(
-                part_pcs, pred_quat, new_quat, valids)
+                part_pcs, pred_rot, new_rot, valids)
 
         # some specific evaluation metrics calculated in eval
         if not self.training:
             # part_acc and connectivity_acc in DGL paper
             loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
-                                                  new_trans, pred_quat,
-                                                  new_quat, valids)
+                                                  new_trans, pred_rot, new_rot,
+                                                  valids)
             if 'contact_points' in data_dict.keys():
                 loss_dict['connectivity_acc'] = calc_connectivity_acc(
-                    pred_trans, pred_quat, data_dict['contact_points'])
+                    pred_trans, pred_rot, data_dict['contact_points'])
             # mse/rmse/mae of translation and rotation in NSM
             for metric in ['mse', 'rmse', 'mae']:
                 loss_dict[f'trans_{metric}'] = trans_metrics(
                     pred_trans, new_trans, valids, metric)
                 loss_dict[f'rot_{metric}'] = rot_metrics(
-                    pred_quat, new_quat, valids, metric)
+                    pred_rot, new_rot, valids, metric)
 
         # return some intermediate variables for reusing
         out_dict = {
             'pred_trans': pred_trans,  # [B, P, 3]
-            'pred_quat': pred_quat,  # [B, P, 4]
+            'pred_rot': pred_rot,  # [B, P, 4]
             'gt_trans_pts': gt_trans_pts,  # [B, P, N, 3]
             'pred_trans_pts': pred_trans_pts,  # [B, P, N, 3]
         }
@@ -359,14 +392,14 @@ class BaseModel(pl.LightningModule):
     def sample_assembly(self, data_dict):
         """Sample assembly for visualization."""
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
-        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
+        gt_trans, gt_rot = data_dict['part_trans'], data_dict['part_rot']
         sample_pred_pcs = []
         for _ in range(self.sample_iter):
             out_dict = self.forward(data_dict)
-            pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
-            pred_pcs = qtransform(pred_trans, pred_quat, part_pcs)
+            pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
+            pred_pcs = transform_pc(pred_trans, pred_rot, part_pcs)
             sample_pred_pcs.append(pred_pcs)
-        gt_pcs = qtransform(gt_trans, gt_quat, part_pcs)  # [B, P, N, 3]
+        gt_pcs = transform_pc(gt_trans, gt_rot, part_pcs)  # [B, P, N, 3]
 
         colors = np.array(self.cfg.data.colors)
         B = part_pcs.shape[0]
@@ -385,3 +418,7 @@ class BaseModel(pl.LightningModule):
                     gt_pcs_lst.append(gt)
 
         return gt_pcs_lst, pred_pcs_lst
+
+    def _wrap_rotation(self, rot_tensor):
+        """Wrap torch.Tensor rotation in `Rotation3D`."""
+        return Rotation3D(rot_tensor, rot_type=self.rot_type)

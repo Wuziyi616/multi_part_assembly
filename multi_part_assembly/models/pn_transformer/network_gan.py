@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from multi_part_assembly.models import build_encoder
-from multi_part_assembly.utils import qtransform
+from multi_part_assembly.utils import transform_pc
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 from .network import PNTransformer
@@ -34,7 +34,7 @@ class PNTransformerGAN(PNTransformer):
     """
 
     def __init__(self, cfg):
-        super().__init__(cfg=cfg)
+        super().__init__(cfg)
 
         self.discriminator = self._init_discriminator()
         self.d_npoint = self.cfg.model.discriminator_num_points
@@ -107,11 +107,11 @@ class PNTransformerGAN(PNTransformer):
         with torch.no_grad():
             out_dict = self.forward(forward_dict)
 
-        pred_trans, pred_quat = out_dict['trans'], out_dict['quat']
-        gt_trans, gt_quat = data_dict['part_trans'], data_dict['part_quat']
-        pred_pts = qtransform(pred_trans, pred_quat, part_pcs).detach()
+        pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
+        gt_trans, gt_rot = data_dict['part_trans'], data_dict['part_rot']
+        pred_pts = transform_pc(pred_trans, pred_rot, part_pcs).detach()
         pred_pts = self._sample_points(pred_pts, valids, self.d_npoint)
-        gt_pts = qtransform(gt_trans, gt_quat, part_pcs).detach()
+        gt_pts = transform_pc(gt_trans, gt_rot, part_pcs).detach()
         gt_pts = self._sample_points(gt_pts, valids, self.d_npoint)
         real = torch.ones(batch_size).type_as(part_pcs).detach()
         fake = torch.zeros(batch_size).type_as(part_pcs).detach()
