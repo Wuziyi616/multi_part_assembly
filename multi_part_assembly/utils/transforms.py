@@ -23,6 +23,15 @@ from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
 
 
 @torch.no_grad()
+def _is_normalized(mat, dim=-1):
+    """
+    Check if one dim of a matrix is normalized.
+    """
+    norm = torch.norm(mat, p=2, dim=dim)
+    return torch.minimum((norm - 1.).abs(), (norm - 0.).abs()).max() < 1e-6
+
+
+@torch.no_grad()
 def _is_orthogonal(mat):
     """
     Check if a matrix (..., 3, 3) is orthogonal.
@@ -60,7 +69,7 @@ class Rotation3D:
         if self._rot_type == 'quat':
             assert self._rot.shape[-1] == 4
             # norm == 1
-            assert (torch.norm(self._rot, p=2, dim=-1) - 1.).abs().max() < 1e-6
+            assert _is_normalized(self._rot, dim=-1)
         elif self._rot_type == 'rmat':
             if self._rot.shape[-1] == 3:  # 3x3 matrix
                 assert self._rot.shape[-2] == 3
