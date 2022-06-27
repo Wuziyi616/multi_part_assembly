@@ -22,6 +22,17 @@ from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
     axis_angle_to_quaternion, axis_angle_to_matrix
 
 
+@torch.no_grad()
+def _is_orthogonal(mat):
+    """
+    Check if a matrix (..., 3, 3) is orthogonal.
+    """
+    mat = mat.view(-1, 3, 3)
+    iden = torch.eye(3).unsqueeze(0).repeat(mat.shape[0], 1, 1).type_as(mat)
+    mat = torch.bmm(mat, mat.transpose(1, 2))
+    return torch.allclose(mat, iden, atol=1e-6)
+
+
 class Rotation3D:
     """Class for different formats of 3D rotation, enabling easy conversion.
 
@@ -48,8 +59,17 @@ class Rotation3D:
         assert self._rot_type in self.ROT_TYPE
         if self._rot_type == 'quat':
             assert self._rot.shape[-1] == 4
+            # norm == 1
+            assert (torch.norm(self._rot, p=2, dim=-1) - 1.).abs().max() < 1e-6
         elif self._rot_type == 'rmat':
-            assert self._rot.shape[-1] == self._rot.shape[-2] == 3
+            if self._rot.shape[-1] == 3:  # 3x3 matrix
+                assert self._rot.shape[-2] == 3
+            elif self._rot.shape[-1] == 6:  # 6D representation
+                x = self._rot[..., :3]
+                y = self._rot[..., 3:]
+                z = torch.cross(x, y, dim=-1)
+                self._rot = torch.stack([x, y, z], dim=-2)
+            assert _is_orthogonal(self._rot)
         elif self._rot_type == 'axis':
             assert self._rot.shape[-1] == 3
 
@@ -450,14 +470,15 @@ def rot_pc(rot, pc, rot_type=None):
     """
     if rot_type is None:
         assert isinstance(rot, Rotation3D)
-        rot = rot.rot
+        r = rot.rot
         rot_type = rot.rot_type
     else:
         assert isinstance(rot, torch.Tensor)
+        r = rot
     if rot_type == 'quat':
-        return qrot(rot, pc)
+        return qrot(r, pc)
     elif rot_type == 'rmat':
-        return rmat_rot(rot, pc)
+        return rmat_rot(r, pc)
     else:
         raise NotImplementedError(f'{rot.rot_type} is not supported!')
 
@@ -473,14 +494,15 @@ def transform_pc(trans, rot, pc, rot_type=None):
     """
     if rot_type is None:
         assert isinstance(rot, Rotation3D)
-        rot = rot.rot
+        r = rot.rot
         rot_type = rot.rot_type
     else:
         assert isinstance(rot, torch.Tensor)
+        r = rot
     if rot_type == 'quat':
-        return qtransform(trans, rot, pc)
+        return qtransform(trans, r, pc)
     elif rot_type == 'rmat':
-        return rmat_transform(trans, rot, pc)
+        return rmat_transform(trans, r, pc)
     else:
         raise NotImplementedError(f'{rot_type} is not supported!')
 

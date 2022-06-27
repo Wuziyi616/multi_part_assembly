@@ -77,8 +77,8 @@ def rot_cosine_loss(rot1, rot2, valids):
     elif rot_type == 'rmat':
         B = rot1.shape[0]
         rmat1, rmat2 = rot1.rot.view(-1, 3, 3), rot2.rot.view(-1, 3, 3)
-        identity = torch.eye(3).unsqueeze(0).type_as(rmat1)
-        loss_per_data = (identity - torch.bmm(rmat1.transpose(1, 2), rmat2)).\
+        iden = torch.eye(3).unsqueeze(0).type_as(rmat1)
+        loss_per_data = (iden - torch.bmm(rmat1.transpose(1, 2), rmat2)).\
             pow(2).sum(dim=[-1, -2]).view(B, -1)
     else:
         raise NotImplementedError(f'cosine loss not supported for {rot_type}!')

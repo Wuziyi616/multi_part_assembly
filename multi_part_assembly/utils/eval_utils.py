@@ -125,13 +125,16 @@ def calc_connectivity_acc(trans, rot, contact_points):
     """
     B, P, _ = trans.shape
     thre = 0.01
+    # get torch.Tensor of rotation for simplicity
+    rot_type = rot.rot_type
+    rot = rot.rot
 
     def get_min_l2_dist(points1, points2, trans1, trans2, rot1, rot2):
         """Compute the min L2 distance between two set of points."""
         # points1/2: [num_contact, num_symmetry, 3]
         # trans/rot: [num_contact, 3/4/(3, 3)]
-        points1 = transform_pc(trans1, rot1, points1)
-        points2 = transform_pc(trans2, rot2, points2)
+        points1 = transform_pc(trans1, rot1, points1, rot_type=rot_type)
+        points2 = transform_pc(trans2, rot2, points2, rot_type=rot_type)
         dist = ((points1[:, :, None] - points2[:, None, :])**2).sum(-1)
         return dist.min(-1)[0].min(-1)[0]  # [num_contact]
 
