@@ -81,7 +81,7 @@ def rot_cosine_loss(rot1, rot2, valids):
         loss_per_data = (iden - torch.bmm(rmat1.transpose(1, 2), rmat2)).\
             pow(2).sum(dim=[-1, -2]).view(B, -1)
     else:
-        raise NotImplementedError(f'cosine loss not supported for {rot_type}!')
+        raise NotImplementedError(f'cosine loss not supported for {rot_type}')
     loss_per_data = _valid_mean(loss_per_data, valids)
     return loss_per_data
 

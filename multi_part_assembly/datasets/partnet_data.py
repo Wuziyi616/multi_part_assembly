@@ -232,7 +232,7 @@ class PartNetPartDataset(Dataset):
                 data_dict['valid_matrix'] = out
 
             else:
-                raise ValueError(f'ERROR: unknown data {key}!')
+                raise ValueError(f'ERROR: unknown data {key}')
 
         return data_dict
 

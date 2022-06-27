@@ -10,7 +10,7 @@ from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
     shape_cd_loss, rot_cosine_loss, rot_points_l2_loss
 from multi_part_assembly.utils import calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, chamfer_distance
+    trans_metrics, rot_metrics, strict_rot_metrics, chamfer_distance
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -40,7 +40,7 @@ class BaseModel(pl.LightningModule):
             self.zero_pose = zero_pose
         else:
             raise NotImplementedError(
-                f'rotation {self.rot_type} is not supported!')
+                f'rotation {self.rot_type} is not supported')
 
         # data related
         self.semantic = (self.cfg.data.dataset != 'geometry')
@@ -101,7 +101,7 @@ class BaseModel(pl.LightningModule):
             for k, v in losses.items()
         }
         print('; '.join([f'{k}: {v.item():.6f}' for k, v in avg_loss.items()]))
-        # TODO: this is a hack to get results outside `Trainer.test()` function
+        # this is a hack to get results outside `Trainer.test()` function
         self.test_results = avg_loss
 
     def forward_pass(self, data_dict, mode, optimizer_idx):
@@ -278,19 +278,9 @@ class BaseModel(pl.LightningModule):
 
         # some specific evaluation metrics calculated in eval
         if not self.training:
-            # part_acc and connectivity_acc in DGL paper
-            loss_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans,
-                                                  new_trans, pred_rot, new_rot,
-                                                  valids)
-            if 'contact_points' in data_dict.keys():
-                loss_dict['connectivity_acc'] = calc_connectivity_acc(
-                    pred_trans, pred_rot, data_dict['contact_points'])
-            # mse/rmse/mae of translation and rotation in NSM
-            for metric in ['mse', 'rmse', 'mae']:
-                loss_dict[f'trans_{metric}'] = trans_metrics(
-                    pred_trans, new_trans, valids, metric)
-                loss_dict[f'rot_{metric}'] = rot_metrics(
-                    pred_rot, new_rot, valids, metric)
+            eval_dict = self._calc_metrics(data_dict, out_dict, new_trans,
+                                           new_rot)
+            loss_dict.update(eval_dict)
 
         # return some intermediate variables for reusing
         out_dict = {
@@ -301,6 +291,28 @@ class BaseModel(pl.LightningModule):
         }
 
         return loss_dict, out_dict
+
+    @torch.no_grad()
+    def _calc_metrics(self, data_dict, out_dict, gt_trans, gt_rot):
+        """Calculate evaluation metrics at testing time."""
+        # gt should be output of `self._match_parts()` in semantic assembly
+        metric_dict = {}
+        part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
+        pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
+        # part_acc and connectivity_acc in DGL paper
+        metric_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans, gt_trans,
+                                                pred_rot, gt_rot, valids)
+        if 'contact_points' in data_dict.keys():
+            metric_dict['connectivity_acc'] = calc_connectivity_acc(
+                pred_trans, pred_rot, data_dict['contact_points'])
+        # mse/rmse/mae of translation and rotation in NSM
+        for metric in ['mse', 'rmse', 'mae']:
+            metric_dict[f'trans_{metric}'] = trans_metrics(
+                pred_trans, gt_trans, valids, metric)
+            metric_dict[f'rot_{metric}'] = rot_metrics(pred_rot, gt_rot,
+                                                       valids, metric)
+        metric_dict['geo_rot'] = strict_rot_metrics(pred_rot, gt_rot, valids)
+        return metric_dict
 
     def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):
         """Predict poses and calculate loss.
@@ -391,6 +403,10 @@ class BaseModel(pl.LightningModule):
     @torch.no_grad()
     def sample_assembly(self, data_dict):
         """Sample assembly for visualization."""
+        if 'part_rot' not in data_dict:
+            part_quat = data_dict.pop('part_quat')
+            data_dict['part_rot'] = \
+                Rotation3D(part_quat, rot_type='quat').convert(self.rot_type)
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         gt_trans, gt_rot = data_dict['part_trans'], data_dict['part_rot']
         sample_pred_pcs = []

@@ -8,4 +8,4 @@ def build_dataloader(cfg):
     elif cfg.data.dataset == 'geometry':
         return build_geometry_dataloader(cfg)
     else:
-        raise NotImplementedError(f'Dataset {cfg.data.dataset} not supported!')
+        raise NotImplementedError(f'Dataset {cfg.data.dataset} not supported')

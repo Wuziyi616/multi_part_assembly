@@ -35,7 +35,7 @@ def test(cfg):
     all_gpus = list(cfg.exp.gpus)
     trainer = pl.Trainer(
         gpus=all_gpus,
-        # TODO: we should use DP because DDP will duplicate some data
+        # we should use DP because DDP will duplicate some data
         strategy='dp' if len(all_gpus) > 1 else None,
     )
 

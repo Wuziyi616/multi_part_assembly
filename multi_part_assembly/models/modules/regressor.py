@@ -14,7 +14,7 @@ class PoseRegressor(nn.Module):
         elif rot_type == 'rmat':
             rot_dim = 6  # 6D representation from the CVPR'19 paper
         else:
-            raise NotImplementedError(f'rotation {rot_type} is not supported!')
+            raise NotImplementedError(f'rotation {rot_type} is not supported')
         self.rot_type = rot_type
 
         self.fc_layers = nn.Sequential(
@@ -38,12 +38,12 @@ class PoseRegressor(nn.Module):
         if self.rot_type == 'quat':
             rot = F.normalize(rot, p=2, dim=-1)
         elif self.rot_type == 'rmat':
-            x_raw, y_raw = rot[..., :3], rot[..., 3:]
-            x = F.normalize(x_raw, p=2, dim=-1)
-            z = torch.cross(x, y_raw, dim=-1)
-            z = F.normalize(z, p=2, dim=-1)
-            y = torch.cross(z, x, dim=-1)
-            rot = torch.cat([x, y], dim=-1)
+            # adopted from PyTorch3D's `rotation_6d_to_matrix`
+            a1, a2 = rot[..., :3], rot[..., 3:]
+            b1 = F.normalize(a1, p=2, dim=-1)
+            b2 = a2 - (b1 * a2).sum(-1, keepdim=True) * b1
+            b2 = F.normalize(b2, p=2, dim=-1)
+            rot = torch.cat([b1, b2], dim=-1)  # back to [..., 6]
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]
         return rot, trans
 

@@ -13,7 +13,7 @@ with open(args.info_file, 'r') as f:
     all_path = [line.strip() for line in f.readlines()]
 
 all_cat = np.unique([line.split('/')[args.cat_loc] for line in all_path])
-print(f'{all_cat}\n{len(all_cat)} categories detected!')
+print(f'{all_cat}\n{len(all_cat)} categories detected')
 
 cat2path = {
     cat: [path for path in all_path if cat == path.split('/')[args.cat_loc]]
@@ -31,7 +31,7 @@ for cat, paths in cat2path.items():
     val_paths.extend(paths[:n_val])
 
 print(f'Split {len(all_path)} data into {len(train_paths)} training '
-      f'and {len(val_paths)} validation!')
+      f'and {len(val_paths)} validation')
 
 # save to {}.train.txt and {}.val.txt
 with open(args.info_file.replace('.txt', '.train.txt'), 'w') as f:

@@ -58,7 +58,7 @@ class GeometryPartDataset(Dataset):
         for mesh in mesh_list:
             mesh_dir = os.path.join(self.data_dir, mesh)
             if not os.path.isdir(mesh_dir):
-                print(f'{mesh} does not exist!')
+                print(f'{mesh} does not exist')
                 continue
             for frac in os.listdir(mesh_dir):
                 # we take both fractures and modes for training
@@ -202,7 +202,7 @@ class GeometryPartDataset(Dataset):
                 data_dict['valid_matrix'] = out
 
             else:
-                raise ValueError(f'ERROR: unknown data {key}!')
+                raise ValueError(f'ERROR: unknown data {key}')
 
         return data_dict
 

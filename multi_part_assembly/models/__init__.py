@@ -22,4 +22,4 @@ def build_model(cfg):
     elif cfg.model.name == 'pn_transformer_refine':
         return PNTransformerRefine(cfg)
     else:
-        raise NotImplementedError(f'Model {cfg.model.name} not supported!')
+        raise NotImplementedError(f'Model {cfg.model.name} not supported')

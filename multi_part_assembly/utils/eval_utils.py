@@ -49,21 +49,43 @@ def rot_metrics(rot1, rot2, valids, metric):
         [B], metric per data in the batch
     """
     assert metric in ['mse', 'rmse', 'mae']
-    deg1 = rot1.to_euler()
-    deg2 = rot2.to_euler()
-    # since euler angle has the discontinuity at 180
-    # -179 and +179 actually only has an error of 2 degree
-    # convert -179 to 181
-    deg2_offset = deg2 + 360.
+    deg1 = rot1.to_euler(to_degree=True)  # [B, P, 3]
+    deg2 = rot2.to_euler(to_degree=True)
     diff1 = (deg1 - deg2).abs()
-    diff2 = (deg1 - deg2_offset).abs()
-    deg2 = torch.where(diff1 < diff2, deg2, deg2_offset)
+    diff2 = 360. - (deg1 - deg2).abs()
+    # since euler angle has the discontinuity at 180
+    diff = torch.minimum(diff1, diff2)
     if metric == 'mse':
-        metric_per_data = (deg1 - deg2).pow(2).mean(dim=-1)  # [B, P]
+        metric_per_data = diff.pow(2).mean(dim=-1)  # [B, P]
     elif metric == 'rmse':
-        metric_per_data = (deg1 - deg2).pow(2).mean(dim=-1)**0.5
+        metric_per_data = diff.pow(2).mean(dim=-1)**0.5
     else:
-        metric_per_data = (deg1 - deg2).abs().mean(dim=-1)
+        metric_per_data = diff.abs().mean(dim=-1)
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
+
+
+@torch.no_grad()
+def strict_rot_metrics(rot1, rot2, valids):
+    """Evaluation metrics for rotation in euler angle (degree) space.
+
+    According to https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf
+        Section 4, euler angles MSE is not a good metric.
+    So we adopt the `Geodesic on the Unit Sphere` metric introduced in the
+        paper Section 3.6. The authors prove that this equals to
+        `2·arccos(|q1·q2|)` (see eq.34 of the paper).
+
+    Args:
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        valids: [B, P], 1 for input parts, 0 for padded parts
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    quat1 = rot1.to_quat()  # [B, P, 4]
+    quat2 = rot2.to_quat()
+    metric_per_data = 2. * torch.acos((quat1 * quat2).sum(dim=-1).abs())
     metric_per_data = _valid_mean(metric_per_data, valids)
     return metric_per_data
 
