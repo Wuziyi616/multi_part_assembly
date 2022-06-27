@@ -23,7 +23,6 @@ def build_transformer_encoder(d_model,
         dim_feedforward=ffn_dim,
         norm_first=norm_first,
         batch_first=True)
-    # TODO: sometimes this final-norm is unnecessary even in pre-LN cases
     norm = nn.LayerNorm(d_model) if norm_first else None
     transformer_encoder = nn.TransformerEncoder(
         encoder_layer=transformer_enc_layer, num_layers=num_layers, norm=norm)

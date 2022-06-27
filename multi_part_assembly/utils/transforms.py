@@ -11,14 +11,80 @@ Transformation functions. Adopted from:
 # LICENSE file in the root directory of this source tree.
 #
 
-import copy
+import numpy as np
 from functools import reduce
 from scipy.spatial.transform import Rotation as R
 
 import torch
-import numpy as np
 
-# Util functions
+from pytorch3d.transforms import quaternion_to_matrix, matrix_to_quaternion, \
+    quaternion_to_axis_angle, matrix_to_axis_angle, \
+    axis_angle_to_quaternion, axis_angle_to_matrix
+
+
+class Rotation3D:
+    """Class for different formats of 3D rotation."""
+
+    ROT_TYPE = ['quat', 'rmat', 'axis']
+    ROT_NAME = {
+        'quat': 'quaternion',
+        'rmat': 'matrix',
+        'axis': 'axis_angle',
+    }
+
+    def __init__(self, rot, rot_type='quat'):
+        self._rot = rot
+        self._rot_type = rot_type
+
+        self._check_valid()
+
+    def _check_valid(self):
+        """Check the shape of rotation."""
+        assert isinstance(self._rot, torch.Tensor)
+        assert self._rot_type in self.ROT_TYPE
+        if self._rot_type == 'quat':
+            assert self._rot.shape[-1] == 4
+        elif self._rot_type == 'rmat':
+            assert self._rot.shape[-1] == self._rot.shape[-2] == 3
+        elif self._rot_type == 'axis':
+            assert self._rot.shape[-1] == 3
+
+    def to_rot(self, rot_type):
+        assert rot_type in self.ROT_TYPE
+        src_type = self.ROT_NAME[self._rot_type]
+        dst_type = self.ROT_NAME[rot_type]
+        if src_type == dst_type:
+            return self.clone()
+        new_rot = eval(f'{src_type}_to_{dst_type}')(self._rot)
+        return Rotation3D(new_rot, rot_type)
+
+    @property
+    def rot(self):
+        return self._rot
+
+    @rot.setter
+    def rot(self, rot):
+        self._rot = rot
+        self._check_valid()
+
+    @property
+    def rot_type(self):
+        return self._rot_type
+
+    def to(self, device):
+        self._rot = self._rot.to(device)
+        return self
+
+    def type(self, dtype):
+        self._rot = self._rot.type(dtype)
+        return self
+
+    def type_as(self, other):
+        self._rot = self._rot.type_as(other)
+        return self
+
+    def clone(self):
+        return Rotation3D(self._rot.clone(), self._rot_type)
 
 
 def _copysign(a, b):
@@ -40,6 +106,7 @@ def _copysign(a, b):
 
 
 # PyTorch-backed implementations
+# quaternion-based transformations
 
 
 def quaternion_invert(quaternion):
@@ -101,33 +168,6 @@ def qmul(q, r):
     return torch.stack((w, x, y, z), dim=1).view(original_shape)
 
 
-def qrot(q, v):
-    """
-    Rotate vector(s) v about the rotation described by quaternion(s) q.
-    Expects a tensor of shape (*, 4) for q and a tensor of shape (*, 3) for v,
-    where * denotes any number of dimensions.
-    Returns a tensor of shape (*, 3).
-    """
-    assert q.shape[-1] == 4
-    assert v.shape[-1] == 3
-
-    # repeat to e.g. apply the same quat for all points in a point cloud
-    # [4] --> [N, 4], [B, 4] --> [B, N, 4], [B, P, 4] --> [B, P, N, 4]
-    if len(q.shape) == len(v.shape) - 1:
-        q = q.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
-
-    assert q.shape[:-1] == v.shape[:-1]
-
-    original_shape = list(v.shape)
-    q = q.view(-1, 4)
-    v = v.view(-1, 3)
-
-    qvec = q[:, 1:]
-    uv = torch.cross(qvec, v, dim=1)
-    uuv = torch.cross(qvec, uv, dim=1)
-    return (v + 2 * (q[:, :1] * uv + uuv)).view(original_shape)
-
-
 def qeuler(q, order, epsilon=0, to_degree=False):
     """
     Convert quaternion(s) q to Euler angles.
@@ -184,6 +224,43 @@ def qeuler(q, order, epsilon=0, to_degree=False):
     return euler
 
 
+def qrmat(q):
+    """
+    Convert quaternion(s) q to rotation matrix(s).
+    Expects a tensor of shape (*, 4), where * denotes any number of dimensions.
+    Returns a tensor of shape (*, 3, 3).
+    """
+    assert q.shape[-1] == 4
+    return quaternion_to_matrix(q)
+
+
+def qrot(q, v):
+    """
+    Rotate vector(s) v about the rotation described by quaternion(s) q.
+    Expects a tensor of shape (*, 4) for q and a tensor of shape (*, 3) for v,
+        where * denotes any number of dimensions.
+    Returns a tensor of shape (*, 3).
+    """
+    assert q.shape[-1] == 4
+    assert v.shape[-1] == 3
+
+    # repeat to e.g. apply the same quat for all points in a point cloud
+    # [4] --> [N, 4], [B, 4] --> [B, N, 4], [B, P, 4] --> [B, P, N, 4]
+    if len(q.shape) == len(v.shape) - 1:
+        q = q.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
+
+    assert q.shape[:-1] == v.shape[:-1]
+
+    original_shape = list(v.shape)
+    q = q.view(-1, 4)
+    v = v.view(-1, 3)
+
+    qvec = q[:, 1:]
+    uv = torch.cross(qvec, v, dim=1)
+    uuv = torch.cross(qvec, uv, dim=1)
+    return (v + 2 * (q[:, :1] * uv + uuv)).view(original_shape)
+
+
 def qtransform(t, q, v):
     """
     Rotate vector(s) v about the rotation described by quaternion(s) q,
@@ -221,6 +298,96 @@ def qtransform_invert(t, q, tqv):
     return v
 
 
+# rmat-based transformations
+
+
+def rmatq(r):
+    """
+    Convert quaternion(s) q to rotation matrix(s).
+    Expects a tensor of shape (*, 4), where * denotes any number of dimensions.
+    Returns a tensor of shape (*, 3, 3).
+    """
+    assert r.shape[-1] == r.shape[-2] == 3
+    return matrix_to_quaternion(r)
+
+
+def rmat_rot(r, v):
+    """
+    Rotate vector(s) v about the rotation described by rmat(s) r.
+    Expects a tensor of shape (*, 3, 3) for r and a tensor of
+        shape (*, 3) for v, where * denotes any number of dimensions.
+    Returns a tensor of shape (*, 3).
+    """
+    assert r.shape[-1] == r.shape[-2] == 3
+    assert v.shape[-1] == 3
+
+    # repeat to e.g. apply the same quat for all points in a point cloud
+    if len(r.shape) == len(v.shape):
+        r = r.unsqueeze(-3).repeat_interleave(v.shape[-2], dim=-3)
+
+    assert r.shape[:-2] == v.shape[:-1]
+
+    original_shape = list(v.shape)
+    r = r.view(-1, 3, 3)
+    v = v.view(-1, 3, 1)
+
+    rv = torch.bmm(r, v).view(original_shape)
+    return rv
+
+
+def rmat_transform(t, r, v):
+    """
+    Rotate vector(s) v about the rotation described by rmat(s) r,
+        and then translate it by the translation described by t.
+    Expects a tensor of shape (*, 3) for t, a tensor of shape (*, 3, 3) for q
+        and a tensor of shape (*, 3) for v, where * denotes any dimensions.
+    Returns a tensor of shape (*, 3).
+    """
+    assert t.shape[-1] == 3
+
+    # repeat to e.g. apply the same trans for all points in a point cloud
+    if len(t.shape) == len(v.shape) - 1:
+        t = t.unsqueeze(-2).repeat_interleave(v.shape[-2], dim=-2)
+
+    assert t.shape == v.shape
+
+    rv = rmat_rot(r, v)
+    trv = rv + t
+
+    return trv
+
+
+# wrapper on arbitrary 3D rotation format
+
+
+def rot_pc(rot, pc):
+    """Rotate the 3D point cloud.
+
+    Args:
+        rot (Rotation3D): quat and rmat are supported now.
+    """
+    if rot.rot_type == 'quat':
+        return qrot(rot.rot, pc)
+    elif rot.rot_type == 'rmat':
+        return rmat_rot(rot.rot, pc)
+    else:
+        raise NotImplementedError(f'{rot.rot_type} is not supported!')
+
+
+def transform_pc(trans, rot, pc):
+    """Rotate and translate the 3D point cloud.
+
+    Args:
+        rot (Rotation3D): quat and rmat are supported now.
+    """
+    if rot.rot_type == 'quat':
+        return qtransform(trans, rot.rot, pc)
+    elif rot.rot_type == 'rmat':
+        return rmat_transform(trans, rot.rot, pc)
+    else:
+        raise NotImplementedError(f'{rot.rot_type} is not supported!')
+
+
 # Numpy-backed implementations
 
 
@@ -237,51 +404,17 @@ def qtransform_np(t, q, v):
     return qtransform(t, q, v).numpy()
 
 
-def euler_to_quaternion(e, order):
-    """
-    Convert Euler angles to quaternions.
-    """
-    assert e.shape[-1] == 3
+def rmat_rot_np(r, v):
+    r = torch.from_numpy(r).contiguous()
+    v = torch.from_numpy(v).contiguous()
+    return rmat_rot(r, v).numpy()
 
-    original_shape = list(e.shape)
-    original_shape[-1] = 4
 
-    e = e.reshape(-1, 3)
-
-    x = e[:, 0]
-    y = e[:, 1]
-    z = e[:, 2]
-
-    rx = np.stack(
-        (np.cos(x / 2), np.sin(x / 2), np.zeros_like(x), np.zeros_like(x)),
-        axis=1)
-    ry = np.stack(
-        (np.cos(y / 2), np.zeros_like(y), np.sin(y / 2), np.zeros_like(y)),
-        axis=1)
-    rz = np.stack(
-        (np.cos(z / 2), np.zeros_like(z), np.zeros_like(z), np.sin(z / 2)),
-        axis=1)
-
-    result = None
-    for coord in order:
-        if coord == 'x':
-            r = rx
-        elif coord == 'y':
-            r = ry
-        elif coord == 'z':
-            r = rz
-        else:
-            raise
-        if result is None:
-            result = r
-        else:
-            result = qmul_np(result, r)
-
-    # Reverse antipodal representation to have a non-negative "w"
-    if order in ['xyz', 'yzx', 'zxy']:
-        result *= -1
-
-    return result.reshape(original_shape)
+def rmat_transform_np(t, r, v):
+    t = torch.from_numpy(t).contiguous()
+    r = torch.from_numpy(r).contiguous()
+    v = torch.from_numpy(v).contiguous()
+    return rmat_transform(t, r, v).numpy()
 
 
 def quaternion_to_rmat(quat):
@@ -304,34 +437,3 @@ def trans_quat_to_pmat(trans, quat):
     rmat = quaternion_to_rmat(quat)
     pose_mat = trans_rmat_to_pmat(trans, rmat)
     return pose_mat
-
-
-def get_sym_point(point, x, y, z):
-    """Get the symmetry point along one or many of xyz axis."""
-    point = copy.deepcopy(point)
-    if x == 1:
-        point[..., 0] = -point[..., 0]
-    if y == 1:
-        point[..., 1] = -point[..., 1]
-    if z == 1:
-        point[..., 2] = -point[..., 2]
-    return point
-
-
-def get_sym_point_list(point, sym=None):
-    """Get all poissible symmetry point as a list.
-    `sym` is a list indicating the symmetry axis of point.
-    """
-    if sym is None:
-        sym = [1, 1, 1]
-    else:
-        if not isinstance(sym, (list, tuple)):
-            sym = sym.tolist()
-        sym = [int(i) for i in sym]
-    point_list = []
-    for x in range(sym[0] + 1):
-        for y in range(sym[1] + 1):
-            for z in range(sym[2] + 1):
-                point_list.append(get_sym_point(point, x, y, z))
-
-    return point_list

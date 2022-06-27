@@ -5,19 +5,23 @@
 ### Python Packages
 
 We recommend using [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) for environment setup.
-Please install PyTorch manually.
+Please install [PyTorch](https://pytorch.org/) and [PyTorch3D](https://pytorch3d.org/) manually.
 Below is an example script installing PyTorch with CUDA 11.3 (please make sure the CUDA version matches your machine, as we will compile custom ops later):
 
 ```
 conda create -n assembly python=3.8
 conda activate assembly
+# pytorch
 conda install pytorch=1.10 torchvision torchaudio cudatoolkit=11.3 -c pytorch
+# pytorch3d
+conda install -c fvcore -c iopath -c conda-forge fvcore iopath
+conda install pytorch3d -c pytorch3d
 ```
 
 You can use `nvcc --version` to see the CUDA version of your machine.
 **Note that the current code is only tested under PyTorch 1.10, and PyTorch 1.11 will fail due to changes to header files**.
 
-Other related packages can installed via:
+Finally, install other related packages and this package via:
 
 ```
 pip install -e .
@@ -172,3 +176,7 @@ python scrips/vis.py --cfg_file $CFG --weight path/to/weight --category $CATEGOR
 ```
 
 It will save the original meshes, input meshes after random transformation and meshes transformed by model predictions, as well as point clouds sampled from them in `path/to/vis` folder (same as the pre-trained weight).
+
+## Misc.
+
+-   We use real part first (w, x, y, z) quaternion in this codebase following [PyTorch3D](https://pytorch3d.org/), while `scipy` use real part last format. Please be careful when using the code.

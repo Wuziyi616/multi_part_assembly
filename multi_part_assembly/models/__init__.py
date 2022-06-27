@@ -1,6 +1,4 @@
-from .modules import build_encoder, PointNet, DGCNN, PointNet2SSG, PointNet2MSG, VNPointNet
-from .modules import PoseRegressor, StocasticPoseRegressor, BaseModel, RNNWrapper
-from .modules import VNLinear, VNBatchNorm, VNLeakyReLU, VNLinearBNLeakyReLU, VNMaxPool
+from .modules import *
 from .pn_transformer import PNTransformer, PNTransformerGAN, PNTransformerRefine
 from .b_global import GlobalModel
 from .b_lstm import LSTMModel
