@@ -91,6 +91,8 @@ if __name__ == '__main__':
         cfg.data.max_num_part = args.max_num_part
     if args.weight:
         cfg.exp.weight_file = args.weight
+    elif cfg.model.name == 'identity':  # trivial identity model
+        cfg.exp.weight_file = None  # no checkpoint needed
     else:
         assert cfg.exp.weight_file, 'Please provide weight to test'
 

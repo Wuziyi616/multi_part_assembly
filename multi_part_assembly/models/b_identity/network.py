@@ -1,5 +1,3 @@
-import torch
-
 from multi_part_assembly.models import BaseModel
 
 
@@ -20,7 +18,7 @@ class IdentityModel(BaseModel):
         B, P = part_pcs.shape[:2]
         zero_pose = self.zero_pose.repeat(B, P, 1).type_as(part_pcs)
         rot = self._wrap_rotation(zero_pose[..., :-3])
-        trans = zero_pose[-3:]
+        trans = zero_pose[..., -3:]
 
         pred_dict = {
             'rot': rot,  # [B, P, 4/(3, 3)], Rotation3D
@@ -56,3 +54,6 @@ class IdentityModel(BaseModel):
         loss_dict, out_dict = self._calc_loss(out_dict, data_dict)
 
         return loss_dict, out_dict
+
+    def load_state_dict(self, *args, **kwargs):
+        pass
