@@ -155,7 +155,7 @@ class DGLModel(BaseModel):
         """Forward pass to predict poses for each part.
 
         Args:
-            data_dict shoud contains:
+            data_dict should contains:
                 - part_pcs: [B, P, N, 3]
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
                 - part_label: [B, P, NUM_PART_CATEGORY] when using as input

@@ -1,5 +1,6 @@
 from .modules import *
 from .pn_transformer import PNTransformer, PNTransformerGAN, PNTransformerRefine
+from .b_identity import IdentityModel
 from .b_global import GlobalModel
 from .b_lstm import LSTMModel
 from .dgl import DGLModel
@@ -7,7 +8,9 @@ from .rgl_net import RGLNet
 
 
 def build_model(cfg):
-    if cfg.model.name == 'global':
+    if cfg.model.name == 'identity':
+        return IdentityModel(cfg)
+    elif cfg.model.name == 'global':
         return GlobalModel(cfg)
     elif cfg.model.name == 'lstm':
         return LSTMModel(cfg)

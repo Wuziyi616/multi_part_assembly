@@ -39,7 +39,11 @@ def random_quaternions(shape):
     Returns:
         Quaternions as tensor of shape (N1, N2, ..., 4).
     """
-    shape = list(shape)
+    assert isinstance(shape, (int, list, tuple))
+    if isinstance(shape, int):
+        shape = [shape]
+    else:
+        shape = list(shape)
     num_quat = np.prod(shape)
     quat = _random_quaternions(num_quat)
     return quat.view(shape + [4])
