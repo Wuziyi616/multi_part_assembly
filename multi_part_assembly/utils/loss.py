@@ -155,13 +155,18 @@ def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
     """
     B, P, N, _ = pts.shape
 
+    # fill the padded points with very large numbers
+    # so that they won't be matched to any point in CD
+    # clone the points to avoid changing the original points
+    pts = pts.detach().clone()
+    valid_mask = valids[..., None, None]  # [B, P, 1, 1]
+    pts = pts.masked_fill(valid_mask == 0, 1e3)
+
     pts1 = transform_pc(trans1, rot1, pts)
     pts2 = transform_pc(trans2, rot2, pts)
 
     shape1 = pts1.flatten(1, 2)  # [B, P*N, 3]
     shape2 = pts2.flatten(1, 2)
-    # TODO: the padded 0 points may break the chamfer here?
-    # TODO: i.e. some points' corresponding points is the padded points
     dist1, dist2 = chamfer_distance(shape1, shape2)  # [B, P*N]
 
     valids = valids.float().detach()

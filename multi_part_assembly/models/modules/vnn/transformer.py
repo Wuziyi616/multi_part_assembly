@@ -87,7 +87,7 @@ class VNTransformerEncoderLayer(nn.Module):
         )
         self.mlp = nn.Sequential(
             VNLinear(d_model, 4 * d_model),
-            VNReLU(d_model) if relu else VNLeakyReLU(d_model),
+            VNReLU(4 * d_model) if relu else VNLeakyReLU(4 * d_model),
             VNLinear(4 * d_model, d_model),
             nn.Dropout(dropout),
         )
@@ -110,9 +110,9 @@ class VNTransformerEncoderLayer(nn.Module):
 
 """ test code
 import torch
-from multi_part_assembly.models import VNSelfAttention
+from multi_part_assembly.models import VNTransformerEncoderLayer
 from multi_part_assembly.utils import random_rotation_matrixs
-vn_attn = VNSelfAttention(16, 1, 0)
+vn_attn = VNTransformerEncoderLayer(16, 4, True, 0)
 pc = torch.rand(2, 16, 3, 100)
 rmat = random_rotation_matrixs(2)
 rot_pc = rmat[:, None] @ pc

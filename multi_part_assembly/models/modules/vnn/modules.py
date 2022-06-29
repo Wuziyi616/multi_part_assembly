@@ -165,11 +165,11 @@ class VNLayerNorm(nn.Module):
         Returns:
             features of the same shape after LN in each instance
         """
-        B, C = x.shape[:2]
-        ori_shape = x.shape
-        x = x.transpose(-1, 1).reshape(B, -1, 3, C)
-        x = self.ln(x)
-        x = x.transpose(-1, 1).reshape(ori_shape)
+        norm = torch.norm(x, dim=2) + EPS  # [B, C, N, ...]
+        norm_ln = self.ln(norm.transpose(1, -1)).transpose(1, -1)
+        norm = norm.unsqueeze(2)
+        norm_ln = norm_ln.unsqueeze(2)
+        x = x / norm * norm_ln
         return x
 
 

@@ -78,7 +78,7 @@ class VNPoseRegressor(nn.Module):
     def __init__(self, feat_dim, rot_type='rmat'):
         super().__init__()
 
-        assert rot_type == 'rmat'
+        assert rot_type == 'rmat', 'VN model only supports rotation matrix'
 
         # for rotation
         self.vn_fc_layers = nn.Sequential(
@@ -116,7 +116,7 @@ class VNPoseRegressor(nn.Module):
         # translation
         trans_x = self.in_feats(x).flatten(-1, -2)  # [N, C*3]
         trans_x = self.fc_layers(trans_x)  # [N, 128]
-        trans = self.trans_head(trans_x)  # [N, 2]
+        trans = self.trans_head(trans_x)  # [N, 3]
         # back to [B, P]
         if unflatten:
             rot = rot.unflatten(0, (B, -1))
