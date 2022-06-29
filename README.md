@@ -34,7 +34,13 @@ Install custom CUDA ops for Chamfer distance and PointNet modules:
 1. Go to `multi_part_assembly/utils/chamfer` and run `pip install -e .`
 2. Go to `multi_part_assembly/models/modules/encoder/pointnet2/pointnet2_ops_lib` and run `pip install -e .`
 
-If you meet any errors, make sure your nvcc version is the same as the CUDA version that PyTorch is compiled for.
+If you meet any errors, make sure your PyTorch version <= 1.10.1 and your nvcc version is the same as the CUDA version that PyTorch is compiled for (`cudatoolkit` version from conda).
+
+### Troubleshooting
+
+1. `AttributeError: module 'distutils' has no attribute 'version'`
+
+Try `pip install setuptools==59.5.0`. See [this issue](https://github.com/pytorch/pytorch/issues/69894#issuecomment-1080635462).
 
 ### Data Preparation
 
@@ -182,4 +188,4 @@ It will save the original meshes, input meshes after random transformation and m
 -   We use real part first (w, x, y, z) quaternion in this codebase following [PyTorch3D](https://pytorch3d.org/), while `scipy` use real part last format. Please be careful when using the code
 -   For ease of data batching, we always represent rotations as quaternions from the dataloaders. However, to build a compatible interface for util functions, model input-output, we wrap the predicted rotations in a `Rotation3D` class, which supports common format conversion and tensor operations. See `multi_part_assembly/utils/rotation.py` for detailed definition of it
 -   Other rotation representation we support:
-    -   6D representation: see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html). The predicted `6`-len tensor will be viewed to `(2, 3)`, and the final row is obtained via cross product. Then, the 3 vectors will be stacked along `-2`-dim. We store `3x3` matrix in our `Rotation3D` object
+    -   6D representation (rotation matrix): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html). The predicted `6`-len tensor will be viewed to `(2, 3)`, and the final row is obtained via cross product. Then, the 3 vectors will be stacked along `-2`-dim. We store `3x3` matrix in our `Rotation3D` object

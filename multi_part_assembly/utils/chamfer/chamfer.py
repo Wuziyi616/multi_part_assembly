@@ -1,4 +1,6 @@
 import torch
+from torch.cuda.amp import custom_fwd, custom_bwd
+
 import chamfer_cuda
 
 
@@ -9,6 +11,7 @@ def safe_sqrt(x, eps=1e-12):
 class ChamferDistanceFunction(torch.autograd.Function):
 
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, xyz1, xyz2):
         xyz1 = xyz1.contiguous()
         xyz2 = xyz2.contiguous()
@@ -19,6 +22,7 @@ class ChamferDistanceFunction(torch.autograd.Function):
         return dist1, dist2
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_dist1, grad_dist2):
         xyz1, xyz2, idx1, idx2 = ctx.saved_tensors
         grad_dist1 = grad_dist1.contiguous()

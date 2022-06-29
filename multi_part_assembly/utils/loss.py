@@ -153,7 +153,7 @@ def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
     Returns:
         [B], loss per data in the batch
     """
-    B, _, N, _ = pts.shape
+    B, P, N, _ = pts.shape
 
     pts1 = transform_pc(trans1, rot1, pts)
     pts2 = transform_pc(trans2, rot2, pts)
@@ -165,11 +165,8 @@ def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
     dist1, dist2 = chamfer_distance(shape1, shape2)  # [B, P*N]
 
     valids = valids.float().detach()
-    valids = valids.unsqueeze(2).repeat(1, 1, N).view(B, -1)
-    dist1 = dist1 * valids
-    dist2 = dist2 * valids
-    # TODO: should use `_valid_mean` instead of directly taking mean?
-    loss_per_data = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)
+    dist = (dist1 + dist2).view(B, P, N).mean(-1)  # [B, P]
+    loss_per_data = _valid_mean(dist, valids)
 
     if ret_pts:
         return loss_per_data, pts1, pts2

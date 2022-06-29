@@ -1,11 +1,14 @@
 import numpy as np
 
 import torch
+import torch.nn.functional as F
 
 from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
     quaternion_to_matrix, quaternion_to_axis_angle, \
     axis_angle_to_quaternion, axis_angle_to_matrix
 from pytorch3d.transforms import rotation_6d_to_matrix as rot6d_to_matrix
+
+EPS = 1e-6
 
 
 @torch.no_grad()
@@ -13,9 +16,8 @@ def _is_normalized(mat, dim=-1):
     """
     Check if one dim of a matrix is normalized.
     """
-    # we also consider all_zeros as normalized
     norm = torch.norm(mat, p=2, dim=dim)
-    return torch.minimum((norm - 1.).abs(), (norm - 0.).abs()).max() < 1e-6
+    return (norm - 1.).abs().max() < EPS
 
 
 @torch.no_grad()
@@ -26,7 +28,7 @@ def _is_orthogonal(mat):
     mat = mat.view(-1, 3, 3)
     iden = torch.eye(3).unsqueeze(0).repeat(mat.shape[0], 1, 1).type_as(mat)
     mat = torch.bmm(mat, mat.transpose(1, 2))
-    return torch.allclose(mat, iden, atol=1e-6)
+    return (mat - iden).abs().max() < EPS
 
 
 def qeuler(q, order, epsilon=0, to_degree=False):
@@ -115,19 +117,40 @@ class Rotation3D:
 
         self._check_valid()
 
+    @torch.no_grad()
+    def _process_zero_quat(self):
+        """Convert zero-norm quat to (1, 0, 0, 0)."""
+        norms = torch.norm(self._rot, dim=-1, keepdim=True)
+        zero_mask = ((norms - 0.).abs() < 1e-6).repeat_interleave(4, dim=-1)
+        zero_mask[..., 1:] = False
+        self._rot[zero_mask] = 1.
+
+    @torch.no_grad()
+    def _normalize_quat(self):
+        """Normalize quaternion."""
+        self._rot = F.normalize(self._rot, p=2, dim=-1)
+
     def _check_valid(self):
         """Check the shape of rotation."""
         assert self._rot_type in self.ROT_TYPE, \
             f'rotation {self._rot_type} is not supported'
         assert isinstance(self._rot, torch.Tensor), 'rotation must be a tensor'
+        # let's always make rotation in float32
+        # otherwise quat won't be unit, and rmat won't be orthogonal
+        self._rot = self._rot.float()
         if self._rot_type == 'quat':
             assert self._rot.shape[-1] == 4, 'wrong quaternion shape'
-            # norm == 1
-            assert _is_normalized(self._rot, dim=-1), 'quaternion is not unit'
+            # quat with norm == 0 are padded, make them (1, 0, 0, 0)
+            self._process_zero_quat()
+            # normalize quaternion
+            self._normalize_quat()
+            # too expensive to check
+            # assert _is_normalized(self._rot, dim=-1), 'quaternion is not unit'
         elif self._rot_type == 'rmat':
             if self._rot.shape[-1] == 3:
                 if self._rot.shape[-2] == 3:  # 3x3 matrix
-                    assert _is_orthogonal(self._rot)
+                    # assert _is_orthogonal(self._rot)
+                    pass  # too expensive to check
                 elif self._rot.shape[-2] == 2:  # 6D representation
                     # (2, 3): (b1, b2), rot6d_to_matrix will calculate b3
                     # and stack them vertically
@@ -150,7 +173,7 @@ class Rotation3D:
         if src_type == dst_type:
             return self.clone()
         new_rot = eval(f'{src_type}_to_{dst_type}')(self._rot)
-        return Rotation3D(new_rot, rot_type)
+        return self.__class__(new_rot, rot_type)
 
     def to_quat(self):
         """Convert to quaternion and return the tensor."""
