@@ -165,7 +165,7 @@ class VNLayerNorm(nn.Module):
         Returns:
             features of the same shape after LN in each instance
         """
-        B, C = x.shape[0], x.shape[-2]
+        B, C = x.shape[:2]
         ori_shape = x.shape
         x = x.transpose(-1, 1).reshape(B, -1, 3, C)
         x = self.ln(x)
@@ -237,16 +237,14 @@ class VNInFeature(nn.Module):
 
 
 """ test code
-from multi_part_assembly.utils import random_quaternions, qrot
-pc = torch.randn(2, 1000, 3)
-quat = random_quaternions(2)
-rot_pc = qrot(quat, pc)
-pc = pc.reshape(2, 10, 100, 3).permute(0, 1, 3, 2)  # [B, C, 3, N, ...]
-rot_pc = rot_pc.reshape(2, 10, 100, 3).permute(0, 1, 3, 2)  # same
-
-model = VNLinear(10, 20)
-
-out = model(pc).transpose(-1, -2).reshape(2, 2000, 3)
-rot_out = model(rot_pc).transpose(-1, -2).reshape(2, 2000, 3)
-(qrot(quat, out) - rot_out).abs().max()
+import torch
+from multi_part_assembly.models import VNLayerNorm
+from multi_part_assembly.utils import random_rotation_matrixs
+vn_ln = VNLayerNorm(16)
+pc = torch.rand(2, 16, 3, 100)
+rmat = random_rotation_matrixs(2)
+rot_pc = rmat[:, None] @ pc
+ln_pc = vn_ln(pc)
+rot_ln_pc = rmat[:, None] @ ln_pc
+ln_rot_pc = vn_ln(rot_pc)
 """

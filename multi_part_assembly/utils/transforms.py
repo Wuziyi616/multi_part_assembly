@@ -16,9 +16,12 @@ from scipy.spatial.transform import Rotation as R
 
 import torch
 
-from pytorch3d.transforms import matrix_to_quaternion, quaternion_to_matrix
-from pytorch3d.transforms import quaternion_invert, quaternion_apply, quaternion_raw_multiply
+from pytorch3d.transforms import quaternion_invert, quaternion_apply, \
+    quaternion_raw_multiply
 from pytorch3d.transforms import random_quaternions as _random_quaternions
+from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
+    quaternion_to_matrix, quaternion_to_axis_angle, \
+    axis_angle_to_quaternion, axis_angle_to_matrix
 
 from .rotation import Rotation3D
 
@@ -103,7 +106,6 @@ def qtransform(t, q, v):
 
     qv = qrot(q, v)
     tqv = qv + t
-
     return tqv
 
 
@@ -112,16 +114,32 @@ def qtransform_invert(t, q, tqv):
     assert t.shape[-1] == 3
     if len(t.shape) == len(tqv.shape) - 1:
         t = t.unsqueeze(-2).repeat_interleave(tqv.shape[-2], dim=-2)
-    assert t.shape == tqv.shape
-    qv = tqv - t
 
+    assert t.shape == tqv.shape
+
+    qv = tqv - t
     q_inv = quaternion_invert(q)
     v = qrot(q_inv, qv)
-
     return v
 
 
 # rmat-based transformations
+
+
+def random_rotation_matrixs(shape):
+    """
+    Generate random rotation matrixs representing rotations.
+
+    We apply quat2rmat on random quaternions.
+
+    Args:
+        shape: [N1, N2, ...]
+
+    Returns:
+        Rotation matrixs as tensor of shape (N1, N2, ..., 3, 3).
+    """
+    quat = random_quaternions(shape)
+    return quaternion_to_matrix(quat)
 
 
 def rmatq(r):
@@ -150,11 +168,7 @@ def rmat_rot(r, v):
 
     assert r.shape[:-2] == v.shape[:-1]
 
-    original_shape = list(v.shape)
-    r = r.view(-1, 3, 3)
-    v = v.view(-1, 3, 1)
-
-    rv = torch.bmm(r, v).view(original_shape)
+    rv = (r @ v.unsqueeze(-1)).squeeze(-1)
     return rv
 
 
@@ -176,7 +190,6 @@ def rmat_transform(t, r, v):
 
     rv = rmat_rot(r, v)
     trv = rv + t
-
     return trv
 
 

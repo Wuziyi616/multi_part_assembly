@@ -10,11 +10,16 @@ from .modules import VNLinear, VNLayerNorm, VNReLU, VNLeakyReLU
 
 
 class VNSelfAttention(nn.Module):
-    """Inspired by VNT-Net: https://arxiv.org/pdf/2205.09690.pdf."""
+    """Inspired by VNT-Net: https://arxiv.org/pdf/2205.09690.pdf.
 
-    def __init__(self, d_model, n_head, dropout=0.1):
+    Note that, we cannot use dropout in VN networks.
+    """
+
+    def __init__(self, d_model, n_head, dropout=0.):
         super().__init__()
+
         assert d_model % n_head == 0
+        assert dropout == 0.
         self.n_head = n_head
 
         # key, query, value projections for all heads
@@ -43,11 +48,11 @@ class VNSelfAttention(nn.Module):
 
         # [B, nh, N, hs*3]
         k = self.key(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-1, -2)
+            permute(0, 1, 4, 2, 3).flatten(-2, -1)
         q = self.query(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-1, -2)
+            permute(0, 1, 4, 2, 3).flatten(-2, -1)
         v = self.value(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-1, -2)
+            permute(0, 1, 4, 2, 3).flatten(-2, -1)
 
         # [B, nh, N, hs*3] x [B, nh, N, hs*3] --> [B, nh, N, N]
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -69,9 +74,10 @@ class VNSelfAttention(nn.Module):
 class VNTransformerEncoderLayer(nn.Module):
     """VN Transformer block."""
 
-    def __init__(self, d_model, n_head, relu=True, dropout=0.1):
+    def __init__(self, d_model, n_head, relu=True, dropout=0.):
         super().__init__()
 
+        assert dropout == 0.
         self.ln1 = VNLayerNorm(d_model)
         self.ln2 = VNLayerNorm(d_model)
         self.attn = VNSelfAttention(
@@ -100,3 +106,17 @@ class VNTransformerEncoderLayer(nn.Module):
         x = x + self.attn(self.ln1(x), src_key_padding_mask)
         x = x + self.mlp(self.ln2(x))
         return x
+
+
+""" test code
+import torch
+from multi_part_assembly.models import VNSelfAttention
+from multi_part_assembly.utils import random_rotation_matrixs
+vn_attn = VNSelfAttention(16, 1, 0)
+pc = torch.rand(2, 16, 3, 100)
+rmat = random_rotation_matrixs(2)
+rot_pc = rmat[:, None] @ pc
+attn_pc = vn_attn(pc)
+rot_attn_pc = rmat[:, None] @ attn_pc
+attn_rot_pc = vn_attn(rot_pc)
+"""

@@ -207,7 +207,8 @@ class Rotation3D:
 
     @rot_type.setter
     def rot_type(self, rot_type):
-        raise NotImplementedError('cannot change rotation type')
+        raise NotImplementedError(
+            'please use convert() for rotation type conversion')
 
     @property
     def shape(self):
