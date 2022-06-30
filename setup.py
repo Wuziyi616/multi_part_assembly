@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 requirements = [
     'numpy', 'pyyaml', 'trimesh', 'wandb', 'torch', 'pytorch_lightning',
-    'tqdm', 'yacs', 'open3d', 'pytorch3d'
+    'tqdm', 'yacs', 'open3d', 'pytorch3d', 'einops'
 ]
 
 

@@ -5,6 +5,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops.layers.torch import Rearrange
 
 from .modules import VNLinear, VNLayerNorm, VNReLU, VNLeakyReLU
 
@@ -23,16 +24,16 @@ class VNSelfAttention(nn.Module):
         self.n_head = n_head
 
         # key, query, value projections for all heads
-        self.key = VNLinear(d_model, d_model)
-        self.query = VNLinear(d_model, d_model)
-        self.value = VNLinear(d_model, d_model)
-
-        # regularization
-        self.attn_drop = nn.Dropout(dropout)
-        self.resid_drop = nn.Dropout(dropout)
+        self.key = VNLinear(d_model, d_model, dim=4)
+        self.query = VNLinear(d_model, d_model, dim=4)
+        self.value = VNLinear(d_model, d_model, dim=4)
+        self.in_rearrange = Rearrange(
+            'B (nh hs) D N -> B nh N (hs D)', nh=n_head, D=3)
 
         # output projection
-        self.proj = VNLinear(d_model, d_model)
+        self.out_rearrange = Rearrange(
+            'B nh N (hs D) -> B (nh hs) D N', nh=n_head, D=3)
+        self.proj = VNLinear(d_model, d_model, dim=4)
 
     def forward(self, x, src_key_padding_mask=None):
         """Forward pass.
@@ -44,15 +45,10 @@ class VNSelfAttention(nn.Module):
         Returns:
             [B, C, 3, N]
         """
-        B, C, _, N = x.size()
-
         # [B, nh, N, hs*3]
-        k = self.key(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-2, -1)
-        q = self.query(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-2, -1)
-        v = self.value(x).reshape(B, self.n_head, C // self.n_head, 3, N).\
-            permute(0, 1, 4, 2, 3).flatten(-2, -1)
+        k = self.in_rearrange(self.key(x))
+        q = self.in_rearrange(self.query(x))
+        v = self.in_rearrange(self.value(x))
 
         # [B, nh, N, hs*3] x [B, nh, N, hs*3] --> [B, nh, N, N]
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -61,13 +57,12 @@ class VNSelfAttention(nn.Module):
             mask = src_key_padding_mask[:, None, None, :]  # [B, 1, 1, N]
             att = att.masked_fill(mask, float('-inf'))
         att = F.softmax(att, dim=-1)
-        att = self.attn_drop(att)
         y = att @ v  # [B, nh, N, N] x [B, nh, N, hs*3] --> [B, nh, N, hs*3]
-        # to [B, C, 3, N]
-        y = y.transpose(2, 3).unflatten(2, (-1, 3)).flatten(1, 2).contiguous()
+        # back to [B, C, 3, N]
+        y = self.out_rearrange(y)
 
         # output projection
-        y = self.resid_drop(self.proj(y))
+        y = self.proj(y)
         return y
 
 
@@ -83,13 +78,11 @@ class VNTransformerEncoderLayer(nn.Module):
         self.attn = VNSelfAttention(
             d_model=d_model,
             n_head=n_head,
-            dropout=dropout,
         )
         self.mlp = nn.Sequential(
-            VNLinear(d_model, 4 * d_model),
-            VNReLU(4 * d_model) if relu else VNLeakyReLU(4 * d_model),
-            VNLinear(4 * d_model, d_model),
-            nn.Dropout(dropout),
+            VNLinear(d_model, 4 * d_model, dim=4),
+            VNReLU(4 * d_model, 4) if relu else VNLeakyReLU(4 * d_model, 4),
+            VNLinear(4 * d_model, d_model, dim=4),
         )
 
     def forward(self, x, src_key_padding_mask=None, src_mask=None):

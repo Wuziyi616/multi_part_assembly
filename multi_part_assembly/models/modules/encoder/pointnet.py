@@ -103,7 +103,7 @@ class VNPointNet(nn.Module):
         self.conv2 = VNLinearBNLeakyReLU(64, 64, dim=4, negative_slope=0.0)
         self.conv3 = VNLinearBNLeakyReLU(64, 64, dim=4, negative_slope=0.0)
         self.conv4 = VNLinearBNLeakyReLU(64, 128, dim=4, negative_slope=0.0)
-        self.conv5 = VNLinear(128, feat_dim)
+        self.conv5 = VNLinear(128, feat_dim, dim=4)
         self.bn5 = VNBatchNorm(feat_dim, dim=4)
 
         pool1 = kwargs.get('pool1', 'mean')  # in-knn pooling
