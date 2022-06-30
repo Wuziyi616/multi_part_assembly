@@ -83,9 +83,9 @@ class VNPoseRegressor(nn.Module):
         # for rotation
         self.vn_fc_layers = nn.Sequential(
             VNLinear(feat_dim, 256),
-            VNLeakyReLU(0.2),
+            VNLeakyReLU(256, negative_slope=0.2),
             VNLinear(256, 128),
-            VNLeakyReLU(0.2),
+            VNLeakyReLU(128, negative_slope=0.2),
         )
 
         # Rotation prediction head
@@ -114,7 +114,7 @@ class VNPoseRegressor(nn.Module):
         rot = self.rot_head(rot_x)  # [N, 2, 3]
         rot = normalize_rot6d(rot)  # [N, 2, 3]
         # translation
-        trans_x = self.in_feats(x).flatten(-1, -2)  # [N, C*3]
+        trans_x = self.in_feats(x).flatten(-2, -1)  # [N, C*3]
         trans_x = self.fc_layers(trans_x)  # [N, 128]
         trans = self.trans_head(trans_x)  # [N, 3]
         # back to [B, P]

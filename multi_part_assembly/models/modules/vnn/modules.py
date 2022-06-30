@@ -247,4 +247,5 @@ rot_pc = rmat[:, None] @ pc
 ln_pc = vn_ln(pc)
 rot_ln_pc = rmat[:, None] @ ln_pc
 ln_rot_pc = vn_ln(rot_pc)
+(rot_ln_pc - ln_rot_pc).abs().max()
 """

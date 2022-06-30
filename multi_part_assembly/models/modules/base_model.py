@@ -8,9 +8,9 @@ from scipy.optimize import linear_sum_assignment
 from multi_part_assembly.utils import transform_pc, Rotation3D
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
-    shape_cd_loss, rot_cosine_loss, rot_points_l2_loss
+    shape_cd_loss, rot_cosine_loss, rot_points_l2_loss, chamfer_distance
 from multi_part_assembly.utils import calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, strict_rot_metrics, chamfer_distance
+    trans_metrics, rot_metrics, strict_rot_metrics, relative_pose_metrics
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -299,19 +299,28 @@ class BaseModel(pl.LightningModule):
         metric_dict = {}
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
-        # part_acc and connectivity_acc in DGL paper
+        # part_acc in DGL paper
         metric_dict['part_acc'] = calc_part_acc(part_pcs, pred_trans, gt_trans,
                                                 pred_rot, gt_rot, valids)
-        if 'contact_points' in data_dict.keys():
+        # semantic assembly
+        # connectivity_acc in DGL paper
+        if self.semantic and 'contact_points' in data_dict.keys():
             metric_dict['connectivity_acc'] = calc_connectivity_acc(
                 pred_trans, pred_rot, data_dict['contact_points'])
+        # geometry assembly
         # mse/rmse/mae of translation and rotation in NSM
-        for metric in ['mse', 'rmse', 'mae']:
-            metric_dict[f'trans_{metric}'] = trans_metrics(
-                pred_trans, gt_trans, valids, metric)
-            metric_dict[f'rot_{metric}'] = rot_metrics(pred_rot, gt_rot,
-                                                       valids, metric)
-        metric_dict['geo_rot'] = strict_rot_metrics(pred_rot, gt_rot, valids)
+        if not self.semantic:
+            for metric in ['mse', 'rmse', 'mae']:
+                metric_dict[f'trans_{metric}'] = trans_metrics(
+                    pred_trans, gt_trans, valids, metric=metric)
+                metric_dict[f'rot_{metric}'] = rot_metrics(
+                    pred_rot, gt_rot, valids, metric=metric)
+            metric_dict['geo_rot'] = strict_rot_metrics(
+                pred_rot, gt_rot, valids)
+            # relative pose metrics
+            relative_metric_dict = relative_pose_metrics(
+                pred_trans, gt_trans, pred_rot, gt_rot, valids)
+            metric_dict.update(relative_metric_dict)
         return metric_dict
 
     def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):

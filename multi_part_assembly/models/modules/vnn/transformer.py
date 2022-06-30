@@ -119,4 +119,5 @@ rot_pc = rmat[:, None] @ pc
 attn_pc = vn_attn(pc)
 rot_attn_pc = rmat[:, None] @ attn_pc
 attn_rot_pc = vn_attn(rot_pc)
+(rot_attn_pc - attn_rot_pc).abs().max()
 """

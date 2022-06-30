@@ -4,90 +4,8 @@ import torch
 
 from .loss import _valid_mean
 from .chamfer import chamfer_distance
+from .rotation import Rotation3D
 from .transforms import transform_pc
-
-
-@torch.no_grad()
-def trans_metrics(trans1, trans2, valids, metric):
-    """Evaluation metrics for transformation.
-
-    Metrics used in the NSM paper.
-
-    Args:
-        trans1: [B, P, 3]
-        trans2: [B, P, 3]
-        valids: [B, P], 1 for input parts, 0 for padded parts
-        metric: str, 'mse', 'rmse' or 'mae'
-
-    Returns:
-        [B], metric per data in the batch
-    """
-    assert metric in ['mse', 'rmse', 'mae']
-    if metric == 'mse':
-        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)  # [B, P]
-    elif metric == 'rmse':
-        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)**0.5
-    else:
-        metric_per_data = (trans1 - trans2).abs().mean(dim=-1)
-    metric_per_data = _valid_mean(metric_per_data, valids)
-    return metric_per_data
-
-
-@torch.no_grad()
-def rot_metrics(rot1, rot2, valids, metric):
-    """Evaluation metrics for rotation in euler angle (degree) space.
-
-    Metrics used in the NSM paper.
-
-    Args:
-        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
-        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
-        valids: [B, P], 1 for input parts, 0 for padded parts
-        metric: str, 'mse', 'rmse' or 'mae'
-
-    Returns:
-        [B], metric per data in the batch
-    """
-    assert metric in ['mse', 'rmse', 'mae']
-    deg1 = rot1.to_euler(to_degree=True)  # [B, P, 3]
-    deg2 = rot2.to_euler(to_degree=True)
-    diff1 = (deg1 - deg2).abs()
-    diff2 = 360. - (deg1 - deg2).abs()
-    # since euler angle has the discontinuity at 180
-    diff = torch.minimum(diff1, diff2)
-    if metric == 'mse':
-        metric_per_data = diff.pow(2).mean(dim=-1)  # [B, P]
-    elif metric == 'rmse':
-        metric_per_data = diff.pow(2).mean(dim=-1)**0.5
-    else:
-        metric_per_data = diff.abs().mean(dim=-1)
-    metric_per_data = _valid_mean(metric_per_data, valids)
-    return metric_per_data
-
-
-@torch.no_grad()
-def strict_rot_metrics(rot1, rot2, valids):
-    """Evaluation metrics for rotation in euler angle (degree) space.
-
-    According to https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf
-        Section 4, euler angles MSE is not a good metric.
-    So we adopt the `Geodesic on the Unit Sphere` metric introduced in the
-        paper Section 3.6. The authors prove that this equals to
-        `2·arccos(|q1·q2|)` (see eq.34 of the paper).
-
-    Args:
-        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
-        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
-        valids: [B, P], 1 for input parts, 0 for padded parts
-
-    Returns:
-        [B], metric per data in the batch
-    """
-    quat1 = rot1.to_quat()  # [B, P, 4]
-    quat2 = rot2.to_quat()
-    metric_per_data = 2. * torch.acos((quat1 * quat2).sum(dim=-1).abs())
-    metric_per_data = _valid_mean(metric_per_data, valids)
-    return metric_per_data
 
 
 @torch.no_grad()
@@ -220,3 +138,169 @@ def get_sym_point_list(point, sym=None):
                 point_list.append(get_sym_point(point, x, y, z))
 
     return point_list
+
+
+@torch.no_grad()
+def trans_metrics(trans1, trans2, valids, metric):
+    """Evaluation metrics for transformation.
+
+    Metrics used in the NSM paper.
+
+    Args:
+        trans1: [B, P, 3]
+        trans2: [B, P, 3]
+        valids: [B, P], 1 for input parts, 0 for padded parts
+        metric: str, 'mse', 'rmse' or 'mae'
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    assert metric in ['mse', 'rmse', 'mae']
+    if metric == 'mse':
+        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)  # [B, P]
+    elif metric == 'rmse':
+        metric_per_data = (trans1 - trans2).pow(2).mean(dim=-1)**0.5
+    else:
+        metric_per_data = (trans1 - trans2).abs().mean(dim=-1)
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
+
+
+@torch.no_grad()
+def rot_metrics(rot1, rot2, valids, metric):
+    """Evaluation metrics for rotation in euler angle (degree) space.
+
+    Metrics used in the NSM paper.
+
+    Args:
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        valids: [B, P], 1 for input parts, 0 for padded parts
+        metric: str, 'mse', 'rmse' or 'mae'
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    assert metric in ['mse', 'rmse', 'mae']
+    deg1 = rot1.to_euler(to_degree=True)  # [B, P, 3]
+    deg2 = rot2.to_euler(to_degree=True)
+    diff1 = (deg1 - deg2).abs()
+    diff2 = 360. - (deg1 - deg2).abs()
+    # since euler angle has the discontinuity at 180
+    diff = torch.minimum(diff1, diff2)
+    if metric == 'mse':
+        metric_per_data = diff.pow(2).mean(dim=-1)  # [B, P]
+    elif metric == 'rmse':
+        metric_per_data = diff.pow(2).mean(dim=-1)**0.5
+    else:
+        metric_per_data = diff.abs().mean(dim=-1)
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
+
+
+@torch.no_grad()
+def strict_rot_metrics(rot1, rot2, valids):
+    """Evaluation metrics for rotation in euler angle (degree) space.
+
+    According to https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf
+        Section 4, euler angles MSE is not a good metric.
+    So we adopt the `Geodesic on the Unit Sphere` metric introduced in the
+        paper Section 3.6. The authors prove that this equals to
+        `2·arccos(|q1·q2|)` (see eq.34 of the paper).
+
+    Args:
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        valids: [B, P], 1 for input parts, 0 for padded parts
+
+    Returns:
+        [B], metric per data in the batch
+    """
+    quat1 = rot1.to_quat()  # [B, P, 4]
+    quat2 = rot2.to_quat()
+    metric_per_data = 2. * torch.acos((quat1 * quat2).sum(dim=-1).abs())
+    metric_per_data = _valid_mean(metric_per_data, valids)
+    return metric_per_data
+
+
+@torch.no_grad()
+def relative_pose_metrics(trans1, trans2, rot1, rot2, valids):
+    """Relative pose error for geometry assembly.
+
+    Since it's hard to define canonical pose for each shape (e.g. symmetry),
+        we take each part as the canonical pose, calculate the relative pose
+        errors from other shapes to it, and take the min of them.
+
+    Args:
+        trans1: [B, P, 3]
+        trans2: [B, P, 3]
+        rot1: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+        valids: [B, P], 1 for input parts, 0 for padded parts
+
+    Returns:
+        [B], [B], translation/rotation error per data in the batch
+    """
+    B, P = valids.shape
+    valids = valids.float()
+    rmat1 = rot1.to_rmat()  # [B, P, 3, 3]
+    rmat2 = rot2.to_rmat()
+
+    def _get_relative_pose(R, T):
+        """Get relative pose from canonical pose.
+
+        Args:
+            R: [B, P, 3, 3]
+            T: [B, P, 3]
+        """
+        R1 = R.unsqueeze(2)  # [B, P, 1, 3, 3]
+        R2 = R.unsqueeze(1)  # [B, 1, P, 3, 3]
+        T1 = T.unsqueeze(2)  # [B, P, 1, 3]
+        T2 = T.unsqueeze(1)  # [B, 1, P, 3]
+        rel_R = R1.transpose(-1, -2) @ R2  # [B, P, P, 3, 3]
+        rel_T = (R1.transpose(-1, -2) @ (
+            (T2 - T1)[..., None]))[..., 0]  # [B, P, P, 3]
+        # [B, i, j, ...] is when i is canonical, relative pose from j to i
+        return rel_R, rel_T
+
+    rel_R1, rel_T1 = _get_relative_pose(rmat1, trans1)
+    rel_R2, rel_T2 = _get_relative_pose(rmat2, trans2)
+    # tile valid_labels for each canonical pose
+    rel_valids = valids.unsqueeze(1).repeat(1, P, 1)  # [B, P, P]
+    # take all the elements except the diagonal
+    mask = torch.eye(P).bool().unsqueeze(0).to(valids.device)  # [1, P, P]
+    mask = (~mask).repeat(B, 1, 1)  # [B, P, P]
+    rel_R1 = rel_R1[mask].unflatten(0, (B * P, P - 1))
+    rel_R2 = rel_R2[mask].unflatten(0, (B * P, P - 1))
+    rel_T1 = rel_T1[mask].unflatten(0, (B * P, P - 1))
+    rel_T2 = rel_T2[mask].unflatten(0, (B * P, P - 1))
+    rel_valids = rel_valids[mask].unflatten(0, (B * P, P - 1))
+    rel_R1 = Rotation3D(rel_R1, rot_type='rmat').convert('quat')
+    rel_R2 = Rotation3D(rel_R2, rot_type='rmat').convert('quat')
+
+    def _min_error(errors, min_idx=None):
+        """Take the canonical pose with the min error."""
+        # errors: [B*P], should mask out invalid parts
+        errors = errors.reshape(B, P)
+        if min_idx is not None:
+            min_errors = torch.gather(errors, dim=1, index=min_idx[:, None])
+        else:
+            shift_errors = errors + 1e9 * (1. - valids)
+            min_idx = shift_errors.argmin(dim=1)  # [B]
+            min_errors = torch.gather(errors, dim=1, index=min_idx[:, None])
+        return min_errors, min_idx
+
+    metric_dict = {}
+    idx = None
+    for metric in ['mse', 'rmse', 'mae']:
+        # we use relative translation MSE to select the canonical pose
+        trans_errors = trans_metrics(rel_T1, rel_T2, rel_valids, metric=metric)
+        metric_dict[f'rel_trans_{metric}'], idx = _min_error(
+            trans_errors, min_idx=idx)
+        rot_errors = rot_metrics(rel_R1, rel_R2, rel_valids, metric=metric)
+        metric_dict[f'rel_rot_{metric}'], idx = _min_error(
+            rot_errors, min_idx=idx)
+    metric_dict['rel_geo_rot'], _ = _min_error(
+        strict_rot_metrics(rel_R1, rel_R2, rel_valids), min_idx=idx)
+
+    return metric_dict
