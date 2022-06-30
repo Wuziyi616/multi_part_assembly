@@ -118,15 +118,15 @@ class Rotation3D:
 
         self._check_valid()
 
-    @torch.no_grad()
     def _process_zero_quat(self):
         """Convert zero-norm quat to (1, 0, 0, 0)."""
-        norms = torch.norm(self._rot, dim=-1, keepdim=True)
-        zero_mask = ((norms - 0.).abs() < 1e-6).repeat_interleave(4, dim=-1)
-        zero_mask[..., 1:] = False
-        self._rot[zero_mask] = 1.
+        with torch.no_grad():
+            norms = torch.norm(self._rot, p=2, dim=-1, keepdim=True)
+            new_rot = torch.zeros_like(self._rot)
+            new_rot[..., 0] = 1.  # zero quat
+            valid_mask = (norms.abs() > 0.5).repeat_interleave(4, dim=-1)
+        self._rot = torch.where(valid_mask, self._rot, new_rot)
 
-    @torch.no_grad()
     def _normalize_quat(self):
         """Normalize quaternion."""
         self._rot = F.normalize(self._rot, p=2, dim=-1)
@@ -142,10 +142,10 @@ class Rotation3D:
         if self._rot_type == 'quat':
             assert self._rot.shape[-1] == 4, 'wrong quaternion shape'
             # quat with norm == 0 are padded, make them (1, 0, 0, 0)
+            # because (0, 0, 0, 0) convert to rmat will cause PyTorch bugs
             self._process_zero_quat()
-            # normalize quaternion
-            self._normalize_quat()
             # too expensive to check
+            # self._normalize_quat()
             # assert _is_normalized(self._rot, dim=-1), 'quaternion is not unit'
         elif self._rot_type == 'rmat':
             if self._rot.shape[-1] == 3:
