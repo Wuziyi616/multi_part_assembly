@@ -4,8 +4,9 @@ import pytorch_lightning as pl
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from scipy.spatial.transform import Rotation as R
 
-from multi_part_assembly.utils import transform_pc, Rotation3D
+from multi_part_assembly.utils import rot_pc, transform_pc, Rotation3D
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
     shape_cd_loss, rot_cosine_loss, rot_points_l2_loss, chamfer_distance
@@ -25,7 +26,7 @@ class BaseModel(pl.LightningModule):
         self._setup()
 
     def _setup(self):
-        # basic setting
+        # basic settings
         self.rot_type = self.cfg.model.rot_type
         if self.rot_type == 'quat':
             self.pose_dim = 3 + 4
@@ -51,7 +52,8 @@ class BaseModel(pl.LightningModule):
         self.use_part_label = 'part_label' in self.cfg.data.data_keys
 
         # loss configs
-        self.sample_iter = self.cfg.loss.sample_iter
+        self.sample_iter = self.cfg.loss.get('sample_iter', 1)
+        self.num_rot = self.cfg.loss.get('num_rot', 1)
 
     def forward(self, data_dict):
         """Forward pass to predict poses for each part."""
@@ -174,7 +176,7 @@ class BaseModel(pl.LightningModule):
     @torch.no_grad()
     def _match_parts(self, part_pcs, pred_trans, pred_rot, gt_trans, gt_rot,
                      match_ids):
-        """Match GT to predctions.
+        """Used in semantic assembly. Match GT to predictions.
 
         Args:
             part_pcs: [B, P, N, 3]
@@ -230,6 +232,43 @@ class BaseModel(pl.LightningModule):
         new_gt_rot = self._wrap_rotation(new_gt_rot_tensor)
         return new_gt_trans, new_gt_rot
 
+    @torch.no_grad()
+    def _match_rotation(self, pred_trans, pred_rot, gt_trans, gt_rot, valids):
+        """Used in geometric assembly. Match GT to predictions.
+
+        Since objects in geometric assembly are often symmetric, we rotate the
+            GT and match the prediction. We use trans MSE as the criterion.
+
+        Args:
+            pred/gt_trans: [B, P, 3]
+            pred/gt_rot: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
+            valids: [B, P], 1 for input parts, 0 for padded parts
+
+        Returns:
+            GT poses after rearrangement
+        """
+        P = pred_trans.shape[1]
+        # uniform rotation along z-axis
+        if not hasattr(self, '_uniform_z_rot'):
+            z_angles = 360. / self.num_rot * np.arange(self.num_rot)
+            z_rot = [R.from_euler('z', a, degrees=True) for a in z_angles]
+            self._uniform_z_rot = torch.from_numpy(np.stack(z_rot, 0))[None]
+        z_rot = self._uniform_z_rot.type_as(gt_trans)  # [1, n, 3, 3]
+        # rotate `gt_trans`, [B, n, P, 3]
+        rot_gt_trans = (z_rot.unsqueeze(2)
+                        @ gt_trans.unsqueeze(1).unsqueeze(-1)).squeeze(-1)
+        trans_loss = (rot_gt_trans - pred_trans.unsqueeze(1)).pow(2).sum(-1)
+        valids = valids.unsqueeze(1).float()
+        trans_loss = (trans_loss * valids).sum(-1) / valids.sum(-1)  # [B, n]
+        # take the min rotation for each data in the batch
+        min_idx = trans_loss.argmin(1)  # [B]
+        min_z_rot = z_rot[0][min_idx].unsqueeze(1).repeat(1, P, 1, 1)
+        min_z_rot = Rotation3D(min_z_rot, rot_type='rmat')
+        # rotate the GTs
+        new_gt_trans = rot_pc(min_z_rot, gt_trans)
+        new_gt_rot = gt_rot.apply_rotation(min_z_rot)
+        return new_gt_trans, new_gt_rot
+
     def _calc_loss(self, out_dict, data_dict):
         """Calculate loss by matching GT to prediction.
 
@@ -245,9 +284,10 @@ class BaseModel(pl.LightningModule):
             new_trans, new_rot = self._match_parts(part_pcs, pred_trans,
                                                    pred_rot, gt_trans, gt_rot,
                                                    match_ids)
+        # rotate the object for lowest translation MSE in geometric assembly
         else:
-            new_trans = gt_trans.detach().clone()
-            new_rot = gt_rot.detach().clone()
+            new_trans, new_rot = self._match_rotation(pred_trans, pred_rot,
+                                                      gt_trans, gt_rot, valids)
 
         # computing loss
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
@@ -295,7 +335,7 @@ class BaseModel(pl.LightningModule):
     @torch.no_grad()
     def _calc_metrics(self, data_dict, out_dict, gt_trans, gt_rot):
         """Calculate evaluation metrics at testing time."""
-        # gt should be output of `self._match_parts()` in semantic assembly
+        # GTs should be output of `self.match` methods
         metric_dict = {}
         part_pcs, valids = data_dict['part_pcs'], data_dict['part_valids']
         pred_trans, pred_rot = out_dict['trans'], out_dict['rot']
@@ -307,7 +347,7 @@ class BaseModel(pl.LightningModule):
         if self.semantic and 'contact_points' in data_dict.keys():
             metric_dict['connectivity_acc'] = calc_connectivity_acc(
                 pred_trans, pred_rot, data_dict['contact_points'])
-        # geometry assembly
+        # geometric assembly
         # mse/rmse/mae of translation and rotation in NSM
         if not self.semantic:
             for metric in ['mse', 'rmse', 'mae']:

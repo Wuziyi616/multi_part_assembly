@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from pytorch3d.transforms import matrix_to_quaternion, matrix_to_axis_angle, \
     quaternion_to_matrix, quaternion_to_axis_angle, \
     axis_angle_to_quaternion, axis_angle_to_matrix
+from pytorch3d.transforms import quaternion_multiply
 from pytorch3d.transforms import rotation_6d_to_matrix as rot6d_to_matrix
 
 EPS = 1e-6
@@ -164,6 +165,16 @@ class Rotation3D:
                 raise NotImplementedError('wrong rotation matrix shape')
         else:  # axis-angle
             assert self._rot.shape[-1] == 3
+
+    def apply_rotation(self, rot):
+        """Apply `rot` to the current rotation, left multiply."""
+        assert rot.rot_type in ['quat', 'rmat']
+        rot = rot.convert(self._rot_type)
+        if self._rot_type == 'quat':
+            new_rot = quaternion_multiply(rot.rot, self._rot)
+        else:
+            new_rot = rot.rot @ self._rot
+        return self.__class__(new_rot, self._rot_type)
 
     def convert(self, rot_type):
         """Convert to a different rotation type."""

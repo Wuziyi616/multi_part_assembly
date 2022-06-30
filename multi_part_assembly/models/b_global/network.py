@@ -68,7 +68,7 @@ class GlobalModel(BaseModel):
                 - part_valids: [B, P], 1 are valid parts, 0 are padded parts
                 - part_label: [B, P, NUM_PART_CATEGORY] when using as input
                     otherwise [B, P, 0] just a placeholder for compatibility
-                - instance_label: [B, P, P (0 in geometry assembly)]
+                - instance_label: [B, P, P (0 in geometric assembly)]
             may contains:
                 - pre_pose_feats: [B, P, C'] (reused) or None
         """

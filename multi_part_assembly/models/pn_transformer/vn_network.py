@@ -9,7 +9,7 @@ from .transformer import VNTransformerEncoder
 class VNPNTransformer(PNTransformer):
     """SO(3) equivariant PointNet-Transformer based multi-part assembly model.
 
-    This model should only be used in geometry assembly, and use rotation
+    This model should only be used in geometric assembly, and use rotation
         matrix as the rotation representation.
     This is because 1) the 6d rotation representation can be parametrized as
         (2, 3) matrix, which is compatible with the (C, 3) shape in VN models
@@ -26,7 +26,7 @@ class VNPNTransformer(PNTransformer):
 
         # see the above class docstring
         assert self.rot_type == 'rmat', 'VNPNTransformer should predict rmat'
-        assert not self.semantic, 'VNPNTransformer is for geometry assembly'
+        assert not self.semantic, 'VNPNTransformer is for geometric assembly'
 
     def _init_encoder(self):
         """Part point cloud encoder."""

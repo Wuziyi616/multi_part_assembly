@@ -225,7 +225,7 @@ def strict_rot_metrics(rot1, rot2, valids):
 
 @torch.no_grad()
 def relative_pose_metrics(trans1, trans2, rot1, rot2, valids):
-    """Relative pose error for geometry assembly.
+    """Relative pose error for geometric assembly.
 
     Since it's hard to define canonical pose for each shape (e.g. symmetry),
         we take each part as the canonical pose, calculate the relative pose
@@ -283,11 +283,11 @@ def relative_pose_metrics(trans1, trans2, rot1, rot2, valids):
         # errors: [B*P], should mask out invalid parts
         errors = errors.reshape(B, P)
         if min_idx is not None:
-            min_errors = torch.gather(errors, dim=1, index=min_idx[:, None])
+            min_errors = torch.gather(errors, dim=1, index=min_idx)
         else:
             shift_errors = errors + 1e9 * (1. - valids)
-            min_idx = shift_errors.argmin(dim=1)  # [B]
-            min_errors = torch.gather(errors, dim=1, index=min_idx[:, None])
+            min_idx = shift_errors.argmin(dim=1, keepdim=True)  # [B, 1]
+            min_errors = torch.gather(errors, dim=1, index=min_idx)
         return min_errors, min_idx
 
     metric_dict = {}
