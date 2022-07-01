@@ -82,15 +82,15 @@ class VNPoseRegressor(nn.Module):
 
         # for rotation
         self.vn_fc_layers = nn.Sequential(
-            VNLinear(feat_dim, 256),
-            VNLeakyReLU(256, negative_slope=0.2),
-            VNLinear(256, 128),
-            VNLeakyReLU(128, negative_slope=0.2),
+            VNLinear(feat_dim, 256, dim=3),
+            VNLeakyReLU(256, dim=3, negative_slope=0.2),
+            VNLinear(256, 128, dim=3),
+            VNLeakyReLU(128, dim=3, negative_slope=0.2),
         )
 
         # Rotation prediction head
         # we use the 6D representation from the CVPR'19 paper
-        self.rot_head = VNLinear(128, 2)  # [2, 3] --> 6
+        self.rot_head = VNLinear(128, 2, dim=3)  # [2, 3] --> 6
 
         # for translation
         self.in_feats = VNInFeature(feat_dim, dim=3)

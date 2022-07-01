@@ -27,7 +27,7 @@ do
     cfg="${CFG:0:(-3)}-dup${repeat_idx}.py"
     cp $CFG $cfg
     job_name="${JOB_NAME}-dup${repeat_idx}"
-    cmd="./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $CFG $PY_ARGS"
+    cmd="./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $cfg $PY_ARGS"
     echo $cmd
     eval $cmd
 done

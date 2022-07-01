@@ -12,6 +12,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 _C.noise_dim = 32  # stochastic PoseRegressor
 _C.sample_iter = 5  # MoN loss sampling
+
 _C.trans_loss_w = 1.
 _C.rot_pt_cd_loss_w = 10.
 _C.transform_pt_cd_loss_w = 10.

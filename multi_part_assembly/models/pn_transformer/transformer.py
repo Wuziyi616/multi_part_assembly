@@ -128,7 +128,7 @@ class VNTransformerEncoder(nn.Module):
             relu=relu,
             dropout=dropout,
         )
-        self.out_fc = VNLinear(d_model, out_dim) if \
+        self.out_fc = VNLinear(d_model, out_dim, dim=4) if \
             out_dim is not None else nn.Identity()
 
     def forward(self, tokens, valid_masks):

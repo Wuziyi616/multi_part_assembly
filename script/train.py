@@ -66,10 +66,7 @@ def main(cfg):
     trainer = pl.Trainer(
         logger=logger,
         gpus=all_gpus,
-        # TODO: very strange, I still cannot train DDP on Vector...
-        # TODO: modify this line if you can run DDP on the cluster
-        # strategy='ddp' if len(all_gpus) > 1 else None,
-        strategy='dp' if len(all_gpus) > 1 else None,
+        strategy=parallel_strategy if len(all_gpus) > 1 else None,
         max_epochs=cfg.exp.num_epochs,
         callbacks=callbacks,
         precision=16 if args.fp16 else 32,  # FP16 training
@@ -116,7 +113,13 @@ if __name__ == '__main__':
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
 
+    # TODO: very strange, I still cannot train DDP on Vector...
+    # TODO: modify this line if you can run DDP on the cluster
+    parallel_strategy = 'dp'  # 'ddp'
     cfg.exp.gpus = args.gpus
+    if len(cfg.exp.gpus) > 1 and parallel_strategy == 'dp':
+        cfg.exp.batch_size *= len(cfg.exp.gpus)
+        cfg.exp.num_workers *= len(cfg.exp.gpus)
     if args.category:
         cfg.data.category = args.category
     if args.weight:

@@ -71,7 +71,9 @@ class BaseModel(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         # avg_loss among all data
         # we need to consider different batch_size
-        batch_sizes = torch.tensor([
+        func = torch.tensor if \
+            isinstance(outputs[0]['batch_size'], int) else torch.stack
+        batch_sizes = func([
             output.pop('batch_size') for output in outputs
         ]).type_as(outputs[0]['loss'])  # [num_batches]
         losses = {
@@ -91,7 +93,9 @@ class BaseModel(pl.LightningModule):
     def test_epoch_end(self, outputs):
         # avg_loss among all data
         # we need to consider different batch_size
-        batch_sizes = torch.tensor([
+        func = torch.tensor if \
+            isinstance(outputs[0]['batch_size'], int) else torch.stack
+        batch_sizes = func([
             output.pop('batch_size') for output in outputs
         ]).type_as(outputs[0]['loss'])  # [num_batches]
         losses = {
@@ -247,11 +251,16 @@ class BaseModel(pl.LightningModule):
         Returns:
             GT poses after rearrangement
         """
+        if self.num_rot == 1:
+            return gt_trans.detach().clone(), gt_rot.detach().clone()
         P = pred_trans.shape[1]
         # uniform rotation along z-axis
         if not hasattr(self, '_uniform_z_rot'):
             z_angles = 360. / self.num_rot * np.arange(self.num_rot)
-            z_rot = [R.from_euler('z', a, degrees=True) for a in z_angles]
+            z_rot = [
+                R.from_euler('z', angle, degrees=True).as_matrix()
+                for angle in z_angles
+            ]
             self._uniform_z_rot = torch.from_numpy(np.stack(z_rot, 0))[None]
         z_rot = self._uniform_z_rot.type_as(gt_trans)  # [1, n, 3, 3]
         # rotate `gt_trans`, [B, n, P, 3]

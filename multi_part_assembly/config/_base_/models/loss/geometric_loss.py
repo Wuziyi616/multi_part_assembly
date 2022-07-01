@@ -16,6 +16,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 _C.noise_dim = 0  # no stochastic
 _C.num_rot = 1  # rotate GT to match the predictions
+
 _C.trans_loss_w = 1.
 _C.rot_pt_cd_loss_w = 10.
 _C.transform_pt_cd_loss_w = 10.

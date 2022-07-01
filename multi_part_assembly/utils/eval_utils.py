@@ -282,12 +282,10 @@ def relative_pose_metrics(trans1, trans2, rot1, rot2, valids):
         """Take the canonical pose with the min error."""
         # errors: [B*P], should mask out invalid parts
         errors = errors.reshape(B, P)
-        if min_idx is not None:
-            min_errors = torch.gather(errors, dim=1, index=min_idx)
-        else:
+        if min_idx is None:
             shift_errors = errors + 1e9 * (1. - valids)
             min_idx = shift_errors.argmin(dim=1, keepdim=True)  # [B, 1]
-            min_errors = torch.gather(errors, dim=1, index=min_idx)
+        min_errors = torch.gather(errors, dim=1, index=min_idx)
         return min_errors, min_idx
 
     metric_dict = {}
