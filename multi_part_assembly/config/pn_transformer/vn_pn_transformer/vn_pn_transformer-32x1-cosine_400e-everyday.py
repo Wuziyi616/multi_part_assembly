@@ -15,8 +15,8 @@ _C = CN()
 
 _C.exp = CN()
 _C.exp.num_epochs = 400
-_C.exp.batch_size = 8  # GPU memory limit on RTX6000 with 24GB memory
-_C.exp.num_workers = 4
+_C.exp.batch_size = 6  # GPU memory limit on RTX6000 with 24GB memory
+_C.exp.num_workers = 6
 
 _C.optimizer = CN()
 _C.optimizer.warmup_ratio = 0.05

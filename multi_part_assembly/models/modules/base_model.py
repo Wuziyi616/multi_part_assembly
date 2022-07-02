@@ -73,9 +73,8 @@ class BaseModel(pl.LightningModule):
         # we need to consider different batch_size
         func = torch.tensor if \
             isinstance(outputs[0]['batch_size'], int) else torch.stack
-        batch_sizes = func([
-            output.pop('batch_size') for output in outputs
-        ]).type_as(outputs[0]['loss'])  # [num_batches]
+        batch_sizes = func([output.pop('batch_size') for output in outputs
+                            ]).type_as(outputs[0]['loss'])  # [num_batches]
         losses = {
             f'val/{k}': torch.stack([output[k] for output in outputs])
             for k in outputs[0].keys()
@@ -95,9 +94,8 @@ class BaseModel(pl.LightningModule):
         # we need to consider different batch_size
         func = torch.tensor if \
             isinstance(outputs[0]['batch_size'], int) else torch.stack
-        batch_sizes = func([
-            output.pop('batch_size') for output in outputs
-        ]).type_as(outputs[0]['loss'])  # [num_batches]
+        batch_sizes = func([output.pop('batch_size') for output in outputs
+                            ]).type_as(outputs[0]['loss'])  # [num_batches]
         losses = {
             f'test/{k}': torch.stack([output[k] for output in outputs])
             for k in outputs[0].keys()
@@ -302,15 +300,16 @@ class BaseModel(pl.LightningModule):
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
         rot_pt_cd_loss = rot_points_cd_loss(part_pcs, pred_rot, new_rot,
                                             valids)
-        transform_pt_cd_loss, gt_trans_pts, pred_trans_pts = \
-            shape_cd_loss(
-                part_pcs,
-                pred_trans,
-                new_trans,
-                pred_rot,
-                new_rot,
-                valids,
-                ret_pts=True)
+        transform_pt_cd_loss, gt_trans_pts, pred_trans_pts = shape_cd_loss(
+            part_pcs,
+            pred_trans,
+            new_trans,
+            pred_rot,
+            new_rot,
+            valids,
+            ret_pts=True,
+            training=self.training,
+        )
         loss_dict = {
             'trans_loss': trans_loss,
             'rot_pt_cd_loss': rot_pt_cd_loss,

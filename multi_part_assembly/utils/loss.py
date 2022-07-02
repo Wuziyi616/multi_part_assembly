@@ -79,7 +79,7 @@ def rot_cosine_loss(rot1, rot2, valids):
         rmat1, rmat2 = rot1.rot.view(-1, 3, 3), rot2.rot.view(-1, 3, 3)
         iden = torch.eye(3).unsqueeze(0).type_as(rmat1)
         loss_per_data = (iden - torch.bmm(rmat1.transpose(1, 2), rmat2)).\
-            pow(2).sum(dim=[-1, -2]).view(B, -1)
+            pow(2).mean(dim=[-1, -2]).view(B, -1)
     else:
         raise NotImplementedError(f'cosine loss not supported for {rot_type}')
     loss_per_data = _valid_mean(loss_per_data, valids)
@@ -138,7 +138,16 @@ def rot_points_cd_loss(pts, rot1, rot2, valids, ret_pts=False):
     return loss_per_data
 
 
-def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
+def shape_cd_loss(
+    pts,
+    trans1,
+    trans2,
+    rot1,
+    rot2,
+    valids,
+    ret_pts=False,
+    training=True,
+):
     """Chamfer distance between point clouds after rotation and translation.
 
     Args:
@@ -149,6 +158,9 @@ def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
         rot2: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
         valids: [B, P], 1 for input parts, 0 for padded parts
         ret_pts: whether to return the transformed point clouds
+        training: at training time we divide the SCD by `P` as an automatic
+            hard negative mining strategy; while at test time we divide by
+            the correct number of parts per shape
 
     Returns:
         [B], loss per data in the batch
@@ -170,8 +182,20 @@ def shape_cd_loss(pts, trans1, trans2, rot1, rot2, valids, ret_pts=False):
     dist1, dist2 = chamfer_distance(shape1, shape2)  # [B, P*N]
 
     valids = valids.float().detach()
-    dist = (dist1 + dist2).view(B, P, N).mean(-1)  # [B, P]
-    loss_per_data = _valid_mean(dist, valids)
+    if training:
+        valids = valids.unsqueeze(2).repeat(1, 1, N).view(B, -1)
+        dist1 = dist1 * valids
+        dist2 = dist2 * valids
+        # we divide the loss by a fixed number `P`
+        # this is actually an automatic hard negative loss weighting mechanism
+        # shapes with more parts will have higher loss
+        # ablation shows better results than using the correct SCD for training
+        loss_per_data = torch.mean(dist1, dim=1) + torch.mean(dist2, dim=1)
+    # this is the correct SCD calculation
+    else:
+        valids = valids.float().detach()
+        dist = (dist1 + dist2).view(B, P, N).mean(-1)  # [B, P]
+        loss_per_data = _valid_mean(dist, valids)
 
     if ret_pts:
         return loss_per_data, pts1, pts2

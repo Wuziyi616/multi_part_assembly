@@ -5,7 +5,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 _C.name = 'vn_pn_transformer'
 _C.rot_type = 'rmat'
-_C.pc_feat_dim = 64  # use a smaller one because VN feature is 3xC
+_C.pc_feat_dim = 48  # use a smaller one because VN feature is 3xC
 
 _C.encoder = 'vn-pointnet'
 _C.encoder_pool1 = 'mean'  # pooling for the input edge-conv
