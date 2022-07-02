@@ -1,191 +1,55 @@
 # Multi Part Assembly
 
-## Prerequisite
+## Introduction
 
-### Python Packages
+This is an open-source 3D shape assembly codebase based on PyTorch + PyTorch-Lightning.
 
-We recommend using [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) for environment setup.
-Please install [PyTorch](https://pytorch.org/) and [PyTorch3D](https://pytorch3d.org/) manually.
-Below is an example script installing PyTorch with CUDA 11.3 (please make sure the CUDA version matches your machine, as we will compile custom ops later):
+### Major Features
 
-```
-conda create -n assembly python=3.8
-conda activate assembly
-# pytorch
-conda install pytorch=1.10 torchvision torchaudio cudatoolkit=11.3 -c pytorch
-# pytorch3d
-conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-conda install pytorch3d -c pytorch3d
-```
+We mainly focus on vision based 3D shape assembly task, which takes in point clouds of multiple parts from an object, and predicts their rotations and translations of the correct assembly.
 
-You can use `nvcc --version` to see the CUDA version of your machine.
-**Note that the current code is only tested under PyTorch 1.10, and PyTorch 1.11 will fail due to changes to header files**.
+-   Support datasets:
+    -   [PartNet](https://partnet.cs.stanford.edu/) (semantic assembly)
+    -   [Breaking-Bad](https://breaking-bad-dataset.github.io/) (geometric assembly)
+-   Support models:
+    -   Global, LSTM, DGL ([NeurIPS 2020](https://arxiv.org/pdf/2006.07793.pdf))
+    -   RGL-NET ([WACV 2022](https://arxiv.org/pdf/2107.12859.pdf))
+    -   Transformer-based (designed by us)
 
-Finally, install other related packages and this package via:
+We carefully benchmark the models to match their performance in their original papers, which you can easily extend to new datasets.
+You can also leverage our codebase to develop your new shape assembly algorithms.
 
-```
-pip install -e .
-```
+## Installation
 
-### Custom Ops
-
-Install custom CUDA ops for Chamfer distance and PointNet modules:
-
-1. Go to `multi_part_assembly/utils/chamfer` and run `pip install -e .`
-2. Go to `multi_part_assembly/models/modules/encoder/pointnet2/pointnet2_ops_lib` and run `pip install -e .`
-
-If you meet any errors, make sure your PyTorch version <= 1.10.1 and your nvcc version is the same as the CUDA version that PyTorch is compiled for (`cudatoolkit` version from conda).
-
-### Troubleshooting
-
-1. `AttributeError: module 'distutils' has no attribute 'version'`
-
-Try `pip install setuptools==59.5.0`. See [this issue](https://github.com/pytorch/pytorch/issues/69894#issuecomment-1080635462).
-
-### Data Preparation
-
-The codebase currently supports two assembly datasets:
-
--   PartNet is a semantic assembly dataset, where each shape (furniture) is decomposed to semantically meaningful parts (e.g. chair legs, backs and arms). We adopt the pre-processed data provided by [DGL](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly). Please follow their [instructions](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly#file-structure) to download the data in `.npy` format.
--   Breaking Bad is a geometric assembly dataset, where each shape breaks down to several fractures without clear semantics. Please follow their [instructions](https://github.com/Breaking-Bad-Dataset/Breaking-Bad-Dataset.github.io/blob/main/README.md) to process the data. The main experiments are conducted on the `everyday` and `artifact` subsets. The `other` subset is very large (~900G) so you may exclude it.
-
-After downloading and processing all the data, please modify the `_C.data_dir` key in the config files under `configs/_base_/datasets`.
+Please refer to [install.md](docs/install.md) for step-by-step guidance on how to install the packages and prepare the data.
 
 ## Config System
 
-Our config system is built upon [yacs](https://github.com/rbgirshick/yacs), which is extended to support inheritance and composition of multiple config files.
+To learn about the config system used in this codebase, please refer to the [config.md](docs/config.md).
 
-For example, if we have a `datasets/partnet.py` for the PartNet dataset as:
+## Quick Start
 
-```
-from yacs.config import CfgNode as CN
+We provide detailed usage of the codebase in [usage.md](docs/usage.md).
+You can train, test and visualize the results using our provided config files, or develop your new methods.
 
-_C = CN()
-_C.dataset = 'partnet'
-_C.data_dir = './data/partnet'
-_C.category = 'Chair'
+## Tutorial
 
-...
+We explain our code design in [tutorial.md](docs/tutorial.md).
+Please read it before modifying the codebase or implementing your new algorithms.
 
+## License
 
-def get_cfg_defaults():
-    return _C.clone()
+This project is released under the [MIT license](LICENSE).
 
-```
+## Acknowledgement
 
-Then, we write another config `foo.py` adopting the values from `partnet.py`:
+We thank the authors of the following repos for open-sourcing their wonderful works:
 
-```
-from yacs.config import CfgNode as CN
+-   [MMCV](https://github.com/open-mmlab/mmcv), [MMDetection3D](https://github.com/open-mmlab/mmdetection3d): general project structure
+-   [PyTorch3D](https://github.com/facebookresearch/pytorch3d): 3D transformation implementation
+-   [DGL](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly): shape assembly model code
+-   [RGL-NET](https://github.com/absdnd/RGL_NET_Progressive_Part_Assembly): shape assembly model code
 
-# 'data' field will be from `partnet.py`
-_base_ = {'data': 'datasets/partnet.py'}
-
-_C = CN()
-
-_C.data = CN()
-_C.data.data_dir = '../data/partnet'
-
-_C.exp = CN()
-_C.exp.num_epochs = 200
-
-...
-
-
-# merging code
-def get_cfg_defaults():
-    base_cfg = _C.clone()
-    cfg = merge_cfg(base_cfg, os.path.dirname(__file__), _base_)
-    return cfg
-
-```
-
-Then, when calling `foo` it will have both `exp` field and `data` field.
-Note that the values set in the child config will overwrite the base one, i.e. `foo_cfg.data.data_dir` will be `'../data/partnet'` instead of `'./data/partnet'`.
-
-In general, each training config is composed of a **exp** (general settings, e.g. checkpoint, epochs), a **data** (dataset setting), a **optimizer** (learning rate and scheduler), a **model** (network architecture), and a **loss** config.
-
-To inspect one specific config file, simply call our privided script:
-
-```
-python script/print_cfg.py --cfg_file $CFG
-```
-
-## Training
-
-To train a model, simply run:
-
-```
-python script/train.py --cfg_file $CFG --other_args ...
-```
-
-For example, to train the Global baseline model on PartNet chair, replace `$CFG` with `configs/global/global-32x1-cosine_200e-partnet_chair.py`.
-Other optional arguments include:
-
--   `--category`: train the model only on a subset of data, e.g. `Chair`, `Table`, `Lamp` on PartNet
--   `--gpus`: setting training GPUs, note that by default we are using DP training. Please modify `script/train.py` to enable DDP training
--   `--weight`: loading pre-trained weights
--   `--fp16`: FP16 mixed precision training
--   `--cudnn`: setting `cudnn.benchmark = True`
--   `--vis`: visualize assembly results to wandb during training, may take large disk space
-
-### Helper Scripts
-
-Script for configuring and submitting jobs to cluster SLURM system:
-
-```
-GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal ./script/sbatch_run.sh $PARTITION $JOB_NAME ./script/train.py --cfg_file $CFG --other_args...
-```
-
-Script for running a job multiple times:
-
-```
-GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./script/dup_run_sbatch.sh $PARTITION $JOB_NAME ./script/train.py $CFG --other_args...
-```
-
-## Testing
-
-Similar to training, to test a pre-trained weight, simply run:
-
-```
-python script/test.py --cfg_file $CFG --weight path/to/weight
-```
-
-Optional auguments:
-
--   `--category`: test the model only on a subset of data
--   `--min_num_part` & `--max_num_part`: control the number of pieces we test
--   `--gpus`: setting testing GPUs
-
-If you want to get per-category result of this model, and report performance averaged over all the categories (used in the paper), run:
-
-```
-python script/test.py --cfg_file $CFG --weight path/to/weight --category all
-```
-
-We will print the metrics on each category and the averaged results.
-
-We also provide script to test your per-category trained models (**currently only support everyday dataset**). Suppose you train the models by running `./scrips/train_everyday_categories.sh $COMMAND $CFG.py`. Then the model checkpoint will be saved in `checkpoint/$CFG-$CATEGORY-dup$X`. To collect the performance on each category, run:
-
-```
-python script/collect_test.py --cfg_file $CFG.py --num_dup $X --ckp_suffix checkpoint/$CFG-
-```
-
-You can again control the number of pieces and GPUs to use.
-
-## Visualization
-
-To visualize the results produced by trained model, simply run:
-
-```
-python scrips/vis.py --cfg_file $CFG --weight path/to/weight --category $CATEGORY --vis $NUM_TO_SAVE
-```
-
-It will save the original meshes, input meshes after random transformation and meshes transformed by model predictions, as well as point clouds sampled from them in `path/to/vis` folder (same as the pre-trained weight).
-
-## Misc.
-
--   We use real part first (w, x, y, z) quaternion in this codebase following [PyTorch3D](https://pytorch3d.org/), while `scipy` use real part last format. Please be careful when using the code
--   For ease of data batching, we always represent rotations as quaternions from the dataloaders. However, to build a compatible interface for util functions, model input-output, we wrap the predicted rotations in a `Rotation3D` class, which supports common format conversion and tensor operations. See `multi_part_assembly/utils/rotation.py` for detailed definition of it
--   Other rotation representation we support:
-    -   6D representation (rotation matrix): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html). The predicted `6`-len tensor will be viewed to `(2, 3)`, and the final row is obtained via cross product. Then, the 3 vectors will be stacked along `-2`-dim. We store `3x3` matrix in our `Rotation3D` object
+We also thank the authors of all the packages we use.
+We appreciate all the contributors as well as users who give valuable feedbacks.
+We wish this codebase could serve as a benchmark and a flexible toolkit for researchers to re-implement existing algorithms and develop their own new shape assembly methods.

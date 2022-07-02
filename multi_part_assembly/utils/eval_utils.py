@@ -199,8 +199,8 @@ def rot_metrics(rot1, rot2, valids, metric):
 
 
 @torch.no_grad()
-def strict_rot_metrics(rot1, rot2, valids):
-    """Evaluation metrics for rotation in euler angle (degree) space.
+def rot_geodesic_dist(rot1, rot2, valids):
+    """Evaluation metrics for rotation using geodesic distance.
 
     According to https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf
         Section 4, euler angles MSE is not a good metric.
@@ -299,6 +299,6 @@ def relative_pose_metrics(trans1, trans2, rot1, rot2, valids):
         metric_dict[f'rel_rot_{metric}'], idx = _min_error(
             rot_errors, min_idx=idx)
     metric_dict['rel_geo_rot'], _ = _min_error(
-        strict_rot_metrics(rel_R1, rel_R2, rel_valids), min_idx=idx)
+        rot_geodesic_dist(rel_R1, rel_R2, rel_valids), min_idx=idx)
 
     return metric_dict

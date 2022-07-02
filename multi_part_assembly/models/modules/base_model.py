@@ -11,7 +11,7 @@ from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
     shape_cd_loss, rot_cosine_loss, rot_points_l2_loss, chamfer_distance
 from multi_part_assembly.utils import calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, strict_rot_metrics, relative_pose_metrics
+    trans_metrics, rot_metrics, rot_geodesic_dist, relative_pose_metrics
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -363,8 +363,8 @@ class BaseModel(pl.LightningModule):
                     pred_trans, gt_trans, valids, metric=metric)
                 metric_dict[f'rot_{metric}'] = rot_metrics(
                     pred_rot, gt_rot, valids, metric=metric)
-            metric_dict['geo_rot'] = strict_rot_metrics(
-                pred_rot, gt_rot, valids)
+            metric_dict['geo_rot'] = rot_geodesic_dist(pred_rot, gt_rot,
+                                                       valids)
             # relative pose metrics
             relative_metric_dict = relative_pose_metrics(
                 pred_trans, gt_trans, pred_rot, gt_rot, valids)
