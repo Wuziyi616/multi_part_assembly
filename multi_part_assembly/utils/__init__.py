@@ -9,3 +9,4 @@ from .utils import colorize_part_pc, filter_wd_parameters, _get_clones, \
 from .eval_utils import trans_metrics, rot_metrics, calc_part_acc, \
     calc_connectivity_acc, strict_rot_metrics, relative_pose_metrics
 from .lr import CosineAnnealingWarmupRestarts, LinearAnnealingWarmup
+from .config_utils import merge_cfg

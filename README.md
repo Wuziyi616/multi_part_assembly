@@ -49,7 +49,7 @@ The codebase currently supports two assembly datasets:
 -   PartNet is a semantic assembly dataset, where each shape (furniture) is decomposed to semantically meaningful parts (e.g. chair legs, backs and arms). We adopt the pre-processed data provided by [DGL](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly). Please follow their [instructions](https://github.com/hyperplane-lab/Generative-3D-Part-Assembly#file-structure) to download the data in `.npy` format.
 -   Breaking Bad is a geometric assembly dataset, where each shape breaks down to several fractures without clear semantics. Please follow their [instructions](https://github.com/Breaking-Bad-Dataset/Breaking-Bad-Dataset.github.io/blob/main/README.md) to process the data. The main experiments are conducted on the `everyday` and `artifact` subsets. The `other` subset is very large (~900G) so you may exclude it.
 
-After downloading and processing all the data, please modify the `_C.data_dir` key in the config files under `multi_part_assembly/config/_base_/datasets`.
+After downloading and processing all the data, please modify the `_C.data_dir` key in the config files under `configs/_base_/datasets`.
 
 ## Config System
 
@@ -119,7 +119,7 @@ To train a model, simply run:
 python script/train.py --cfg_file $CFG --other_args ...
 ```
 
-For example, to train the Global baseline model on PartNet chair, replace `$CFG` with `multi_part_assembly/config/global/global-32x1-cosine_200e-partnet_chair.py`.
+For example, to train the Global baseline model on PartNet chair, replace `$CFG` with `configs/global/global-32x1-cosine_200e-partnet_chair.py`.
 Other optional arguments include:
 
 -   `--category`: train the model only on a subset of data, e.g. `Chair`, `Table`, `Lamp` on PartNet
