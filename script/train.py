@@ -28,6 +28,7 @@ def main(cfg):
 
     # on clusters, quota is limited
     # soft link temp space for checkpointing
+    # TODO: modify this if you are not running on clusters
     if SLURM_JOB_ID and os.path.isdir('/checkpoint/'):
         if not os.path.exists(ckp_dir):
             usr = pwd.getpwuid(os.getuid())[0]
@@ -35,6 +36,18 @@ def main(cfg):
                 usr, SLURM_JOB_ID, ckp_dir))
     else:
         os.makedirs(ckp_dir, exist_ok=True)
+
+    # it's not good to hard-code the wandb id
+    # but on preemption clusters, we want the job to resume the same wandb
+    # process after resuming training
+    # so we have to keep the same wandb id
+    # TODO: modify this if you are not running on preemption clusters
+    preemption = True
+    if SLURM_JOB_ID and preemption:
+        logger_id = logger_name = f'{cfg_name}-{SLURM_JOB_ID}'
+    else:
+        logger_name = cfg_name
+        logger_id = None
 
     # configure callbacks
     checkpoint_callback = ModelCheckpoint(
@@ -54,11 +67,10 @@ def main(cfg):
                                                   train_loader, val_loader)
         callbacks.append(assembly_callback)
 
-    logger_name = f'{cfg_name}-{SLURM_JOB_ID}'
     logger = WandbLogger(
         project='Multi-Part-Assembly',
         name=logger_name,
-        id=logger_name,
+        id=logger_id,
         save_dir=ckp_dir,
     )
 
@@ -113,7 +125,6 @@ if __name__ == '__main__':
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
 
-    # TODO: very strange, I still cannot train DDP on Vector...
     # TODO: modify this line if you can run DDP on the cluster
     parallel_strategy = 'dp'  # 'ddp'
     cfg.exp.gpus = args.gpus
