@@ -257,6 +257,41 @@ class VNInFeature(nn.Module):
         return x_in
 
 
+class VNEqFeature(VNInFeature):
+    """Map VN-IN features back to their original rotation."""
+
+    def forward(self, x, x_in):
+        """
+        Args:
+            x: point features of shape [B, C, 3, N, ...]
+            x_in: rotation invariant features of shape [B, C, 3, N, ...]
+
+        Returns:
+            rotation equivariant features with x mapped from x_in
+        """
+        if self.dim in [4, 5]:
+            dim = -1 if self.dim == 4 else (-1, -2)
+            x_mean = x.mean(dim=dim, keepdim=True).expand(x.size())
+            x = torch.cat((x, x_mean), dim=1)
+
+        z = x
+        z = self.vn1(z)
+        z = self.vn2(z)
+        z = self.vn_lin(z)
+        # z = z.transpose(1, 2).contiguous()
+
+        if self.dim == 4:
+            x_eq = torch.einsum('bijm,bjkm->bikm', x_in, z)
+        elif self.dim == 3:
+            x_eq = torch.einsum('bij,bjk->bik', x_in, z)
+        elif self.dim == 5:
+            x_eq = torch.einsum('bijmn,bjkmn->bikmn', x_in, z)
+        else:
+            raise NotImplementedError(f'dim={self.dim} is not supported')
+
+        return x_eq
+
+
 """ test code
 import torch
 from multi_part_assembly.models import VNLayerNorm

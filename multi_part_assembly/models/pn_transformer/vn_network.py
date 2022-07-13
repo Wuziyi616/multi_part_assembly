@@ -3,7 +3,7 @@ import torch
 from multi_part_assembly.models import build_encoder, VNPoseRegressor
 
 from .network import PNTransformer
-from .transformer import VNTransformerEncoder
+from .transformer import CanonicalVNTransformerEncoder
 
 
 class VNPNTransformer(PNTransformer):
@@ -41,11 +41,10 @@ class VNPNTransformer(PNTransformer):
 
     def _init_corr_module(self):
         """Part feature interaction module."""
-        corr_module = VNTransformerEncoder(
+        corr_module = CanonicalVNTransformerEncoder(
             d_model=self.pc_feat_dim,
             num_heads=self.cfg.model.transformer_heads,
             num_layers=self.cfg.model.transformer_layers,
-            relu=self.cfg.model.get('transformer_relu', True),
             dropout=0.,
         )
         return corr_module
