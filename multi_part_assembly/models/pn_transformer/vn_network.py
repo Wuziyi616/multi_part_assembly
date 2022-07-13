@@ -34,8 +34,8 @@ class VNPNTransformer(PNTransformer):
             self.cfg.model.encoder,
             feat_dim=self.pc_feat_dim,
             global_feat=True,
-            pool1=self.cfg.model.get('encoder_pool1', 'mean'),
-            pool2=self.cfg.model.get('encoder_pool2', 'max'),
+            pool1='mean',
+            pool2='max',
         )
         return encoder
 

@@ -5,7 +5,7 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./script/dup_run_sbatch.sh \
+#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch.sh \
 #       rtx6000 test-sbatch test.py config.py --fp16 --cudnn
 #######################################################################
 
@@ -27,7 +27,7 @@ do
     cfg="${CFG:0:(-3)}-dup${repeat_idx}.py"
     cp $CFG $cfg
     job_name="${JOB_NAME}-dup${repeat_idx}"
-    cmd="./script/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $cfg $PY_ARGS"
+    cmd="./scripts/sbatch_run.sh $PARTITION $job_name $PY_FILE --cfg_file $cfg $PY_ARGS"
     echo $cmd
     eval $cmd
 done

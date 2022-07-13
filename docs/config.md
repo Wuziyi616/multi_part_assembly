@@ -89,8 +89,8 @@ We follow the below style to name each training config:
 {model}_{batch_per_gpu x gpu}_{schedule}_{dataset}.py
 ```
 
-To inspect one specific config file, simply call our privided script:
+To inspect one specific config file, simply call our provided script:
 
 ```
-python script/print_cfg.py --cfg_file $CFG
+python scripts/print_cfg.py --cfg_file $CFG
 ```

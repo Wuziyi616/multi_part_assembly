@@ -4,7 +4,7 @@
 
 #######################################################################
 # An example usage:
-#     ./script/train_everyday_categories.sh "GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./script/dup_run_sbatch.sh rtx6000 everyday_cat ./script/train.py config.py --fp16 --cudnn" config.py
+#     ./scripts/train_everyday_categories.sh "GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch.sh rtx6000 everyday_cat ./scripts/train.py config.py --fp16 --cudnn" config.py
 #######################################################################
 
 CMD=$1
