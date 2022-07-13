@@ -1,7 +1,6 @@
 import torch.nn as nn
 
-from multi_part_assembly.models import VNTransformerEncoderLayer, \
-    VNLayerNorm, VNLinear, VNInFeature, VNEqFeature
+from multi_part_assembly.models import VNInFeature, VNEqFeature
 
 
 def build_transformer_encoder(
@@ -82,7 +81,7 @@ class TransformerEncoder(nn.Module):
         return self.out_fc(out)
 
 
-class CanonicalVNTransformerEncoder(TransformerEncoder):
+class VNTransformerEncoder(TransformerEncoder):
     """VNTransformer encoder with padding_mask.
 
     It first maps tokens to invariant features.
@@ -133,85 +132,14 @@ class CanonicalVNTransformerEncoder(TransformerEncoder):
 
 """ test code
 import torch
-from multi_part_assembly.models import CanonicalVNTransformerEncoder, VNTransformerEncoder
+from multi_part_assembly.models.pn_transformer import VNTransformerEncoder
 from multi_part_assembly.utils import random_rotation_matrixs
-vn_trans = CanonicalVNTransformerEncoder(16, 4, 2, 0.)
-pc = torch.rand(2, 16, 3, 100)
-rmat = random_rotation_matrixs((2, 16))  # [2, 16, 3, 3]
-rot_pc = rmat @ pc
-trans_pc = vn_trans(pc)
-rot_trans_pc = rmat @ trans_pc
-trans_rot_pc = vn_trans(rot_pc)
+vn_trans = VNTransformerEncoder(16, 4, 2, 0.).eval()
+pc = torch.rand(2, 16, 3, 10)  # 10 parts
+rmat = random_rotation_matrixs((2, 10))  # [2, 10, 3, 3]
+rot_pc = (rmat @ pc.transpose(1, -1)).transpose(1, -1)
+trans_pc = vn_trans(pc, None)
+rot_trans_pc = (rmat @ trans_pc.transpose(1, -1)).transpose(1, -1)
+trans_rot_pc = vn_trans(rot_pc, None)
 (rot_trans_pc - trans_rot_pc).abs().max()
 """
-
-
-def build_vn_transformer_encoder(
-    d_model,
-    num_heads,
-    num_layers,
-    relu=True,
-    dropout=0.,
-):
-    """Build the SO(3) rotation equivariant Transformer Encoder.
-
-    Input tokens [B, C, 3, N], output features after interaction [B, C, 3, N].
-
-    Args:
-        d_model: input token feature dim
-        num_heads: head number in multi-head self-attention
-        ffn_dim: MLP hidden size in FFN
-        num_layers: stack TransformerEncoder layers number
-    """
-    transformer_enc_layer = VNTransformerEncoderLayer(
-        d_model=d_model,
-        n_head=num_heads,
-        relu=relu,
-        dropout=dropout,
-    )
-    norm = VNLayerNorm(d_model)
-    transformer_encoder = nn.TransformerEncoder(
-        encoder_layer=transformer_enc_layer, num_layers=num_layers, norm=norm)
-    return transformer_encoder
-
-
-class VNTransformerEncoder(nn.Module):
-    """VNTransformer encoder with padding_mask."""
-
-    def __init__(
-        self,
-        d_model,
-        num_heads,
-        num_layers,
-        dropout=0.,
-        out_dim=None,
-    ):
-        super().__init__()
-
-        self.transformer_encoder = build_vn_transformer_encoder(
-            d_model=d_model,
-            num_heads=num_heads,
-            num_layers=num_layers,
-            dropout=dropout,
-        )
-        self.out_fc = VNLinear(d_model, out_dim, dim=4) if \
-            out_dim is not None else nn.Identity()
-
-    def forward(self, tokens, valid_masks):
-        """Forward pass.
-
-        Args:
-            tokens: [B, C, 3, N]
-            valid_masks: [B, N], True for valid, False for padded
-
-        Returns:
-            torch.Tensor: [B, C, 3, N]
-        """
-        if valid_masks is not None:
-            assert valid_masks.shape[0] == tokens.shape[0]
-            assert valid_masks.shape[1] == tokens.shape[3]
-            pad_masks = (~valid_masks)  # True --> padding
-        else:
-            pad_masks = None
-        out = self.transformer_encoder(tokens, src_key_padding_mask=pad_masks)
-        return self.out_fc(out)

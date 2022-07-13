@@ -207,9 +207,6 @@ class VNInFeature(nn.Module):
         super().__init__()
 
         self.dim = dim
-        if dim != 3:
-            in_channels *= 2  # we will concat x and x.mean()
-
         self.vn1 = VNLinearBNLeakyReLU(
             in_channels,
             in_channels // 2,
@@ -234,13 +231,7 @@ class VNInFeature(nn.Module):
         Returns:
             rotation invariant features of the same shape
         """
-        if self.dim in [4, 5]:
-            dim = -1 if self.dim == 4 else (-1, -2)
-            x_mean = x.mean(dim=dim, keepdim=True).expand(x.size())
-            x = torch.cat((x, x_mean), dim=1)
-
-        z = x
-        z = self.vn1(z)
+        z = self.vn1(x)
         z = self.vn2(z)
         z = self.vn_lin(z)
         z = z.transpose(1, 2).contiguous()
@@ -269,13 +260,7 @@ class VNEqFeature(VNInFeature):
         Returns:
             rotation equivariant features with x mapped from x_in
         """
-        if self.dim in [4, 5]:
-            dim = -1 if self.dim == 4 else (-1, -2)
-            x_mean = x.mean(dim=dim, keepdim=True).expand(x.size())
-            x = torch.cat((x, x_mean), dim=1)
-
-        z = x
-        z = self.vn1(z)
+        z = self.vn1(x)
         z = self.vn2(z)
         z = self.vn_lin(z)
         # z = z.transpose(1, 2).contiguous()
