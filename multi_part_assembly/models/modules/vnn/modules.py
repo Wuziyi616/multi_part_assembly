@@ -251,30 +251,41 @@ class VNInFeature(nn.Module):
 class VNEqFeature(VNInFeature):
     """Map VN-IN features back to their original rotation."""
 
-    def forward(self, x, x_in):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.z = None
+
+    def forward(self, x):
         """
         Args:
             x: point features of shape [B, C, 3, N, ...]
-            x_in: rotation invariant features of shape [B, C, 3, N, ...]
 
         Returns:
-            rotation equivariant features with x mapped from x_in
+            rotation invariant features of the same shape
         """
-        z = self.vn1(x)
-        z = self.vn2(z)
-        z = self.vn_lin(z)
-        # z = z.transpose(1, 2).contiguous()
+        # map to invariant
+        if self.z is None:
+            z = self.vn1(x)
+            z = self.vn2(z)
+            z = self.vn_lin(z)
+            self.z = z
+            z = z.transpose(1, 2).contiguous()
+        # map to equivariant
+        else:
+            z = self.z
+            self.z = None
 
         if self.dim == 4:
-            x_eq = torch.einsum('bijm,bjkm->bikm', x_in, z)
+            x = torch.einsum('bijm,bjkm->bikm', x, z)
         elif self.dim == 3:
-            x_eq = torch.einsum('bij,bjk->bik', x_in, z)
+            x = torch.einsum('bij,bjk->bik', x, z)
         elif self.dim == 5:
-            x_eq = torch.einsum('bijmn,bjkmn->bikmn', x_in, z)
+            x = torch.einsum('bijmn,bjkmn->bikmn', x, z)
         else:
             raise NotImplementedError(f'dim={self.dim} is not supported')
 
-        return x_eq
+        return x
 
 
 """ test code

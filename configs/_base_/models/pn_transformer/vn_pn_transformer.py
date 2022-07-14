@@ -10,7 +10,7 @@ _C.pc_feat_dim = 48  # use a smaller one because VN feature is 3xC
 _C.encoder = 'vn-pointnet'
 
 _C.transformer_heads = 4
-_C.transformer_layers = 4
+_C.transformer_layers = 2
 
 
 def get_cfg_defaults():

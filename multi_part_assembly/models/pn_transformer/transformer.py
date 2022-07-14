@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from multi_part_assembly.models import VNInFeature, VNEqFeature
+from multi_part_assembly.models import VNEqFeature
 
 
 def build_transformer_encoder(
@@ -107,8 +107,8 @@ class VNTransformerEncoder(TransformerEncoder):
             out_dim=out_dim,
         )
 
-        self.feats_in = VNInFeature(d_model, dim=4)
-        self.feats_eq = VNEqFeature(d_model, dim=4)
+        # canonicalizer, map to invariant space then back to equivariant space
+        self.feats_can = VNEqFeature(d_model, dim=4)
 
     def forward(self, tokens, valid_masks):
         """Forward pass.
@@ -121,12 +121,12 @@ class VNTransformerEncoder(TransformerEncoder):
             torch.Tensor: [B, C, 3, N]
         """
         # map tokens to invariant features
-        tokens_in = self.feats_in(tokens).flatten(1, 2)  # [B, C*3, N]
+        tokens_in = self.feats_can(tokens).flatten(1, 2)  # [B, C*3, N]
         tokens_in = tokens_in.transpose(1, 2).contiguous()  # [B, N, C*3]
         out_in = super().forward(tokens_in, valid_masks)  # [B, N, C*3]
         # back to [B, C, 3, N]
         out_in = out_in.transpose(1, 2).unflatten(1, (-1, 3)).contiguous()
-        out_eq = self.feats_eq(tokens, out_in)
+        out_eq = self.feats_can(out_in)
         return out_eq
 
 
