@@ -1,6 +1,6 @@
 from .modules import *
 from .pn_transformer import PNTransformer, PNTransformerGAN, \
-    PNTransformerRefine, VNPNTransformer
+    PNTransformerRefine, VNPNTransformer, VNPNTransformerV2
 from .b_identity import IdentityModel
 from .b_global import GlobalModel
 from .b_lstm import LSTMModel
@@ -27,5 +27,7 @@ def build_model(cfg):
         return PNTransformerRefine(cfg)
     elif cfg.model.name == 'vn_pn_transformer':
         return VNPNTransformer(cfg)
+    elif cfg.model.name == 'vn_pn_transformer_v2':
+        return VNPNTransformerV2(cfg)
     else:
         raise NotImplementedError(f'Model {cfg.model.name} not supported')

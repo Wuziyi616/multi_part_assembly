@@ -1,9 +1,9 @@
 import torch
 
-from multi_part_assembly.models import build_encoder, VNPoseRegressor
+from multi_part_assembly.models import build_encoder, VNEqFeature, VNPoseRegressor, PoseRegressor
 
 from .network import PNTransformer
-from .transformer import VNTransformerEncoder
+from .transformer import VNTransformerEncoder, TransformerEncoder
 
 
 class VNPNTransformer(PNTransformer):
@@ -95,6 +95,77 @@ class VNPNTransformer(PNTransformer):
             # [B, C, 3, P] --> [B, P, C, 3]
             feats = corr_feats.permute(0, 3, 1, 2).contiguous()
         rot, trans = self.pose_predictor(feats)
+        rot = self._wrap_rotation(rot)
+
+        pred_dict = {
+            'rot': rot,  # [B, P, 4/(3, 3)], Rotation3D
+            'trans': trans,  # [B, P, 3]
+            'pre_pose_feats': feats,  # [B, P, C', 3]
+        }
+        return pred_dict
+
+
+class VNPNTransformerV2(VNPNTransformer):
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+
+        self.feats_can = VNEqFeature(
+            self.pc_feat_dim, dim=4, use_rmat=self.cfg.model.rmat_can)
+
+    def _init_corr_module(self):
+        """Part feature interaction module."""
+        corr_module = TransformerEncoder(
+            d_model=self.pc_feat_dim * 3,
+            num_heads=self.cfg.model.transformer_heads,
+            ffn_dim=self.pc_feat_dim * 3 * 4,
+            num_layers=self.cfg.model.transformer_layers,
+            norm_first=True,
+            dropout=0.,
+        )
+        return corr_module
+
+    def _init_pose_predictor(self):
+        """Final pose estimator."""
+        # only use feature as input to in VN models
+        assert self.cfg.loss.noise_dim == 0
+        pose_predictor = PoseRegressor(
+            feat_dim=self.pc_feat_dim * 3,
+            rot_type=self.rot_type,
+            norm_rot=self.cfg.model.rmat_can,  # use rotation matrix in can
+        )
+        return pose_predictor
+
+    def forward(self, data_dict):
+        """Forward pass to predict poses for each part.
+
+        Args:
+            data_dict should contains:
+                - part_pcs: [B, P, N, 3]
+                - part_valids: [B, P], 1 are valid parts, 0 are padded parts
+            may contains:
+                - pre_pose_feats: [B, P, C'*3] (reused) or None
+        """
+        feats = data_dict.get('pre_pose_feats', None)
+        assert feats is None
+
+        part_pcs = data_dict['part_pcs']
+        part_valids = data_dict['part_valids']
+        pc_feats = self._extract_part_feats(part_pcs, part_valids)
+        # [B, P, C, 3] --> [B, C, 3, P]
+        pc_feats = pc_feats.permute(0, 2, 3, 1).contiguous()
+        pc_feats = self.feats_can(pc_feats)  # [B, C, 3, P], invariant
+        # to [B, P, C*3]
+        pc_feats = pc_feats.flatten(1, 2).transpose(1, 2).contiguous()
+        # transformer feature fusion
+        valid_mask = (part_valids == 1)  # [B, P]
+        feats = self.corr_module(pc_feats, valid_mask)  # [B, P, C*3]
+        rot, trans = self.pose_predictor(feats)  # [B, P, 6], [B, P, 3]
+        # translation prediction is invariant, which is what we want
+        # we need to make rotation prediction equivariant
+        # to [B, 2, 3, P]
+        rot = rot.transpose(1, 2).unflatten(1, (2, 3)).contiguous()
+        rot = self.feats_can(rot)  # [B, 2, 3, P], equivariant
         rot = self._wrap_rotation(rot)
 
         pred_dict = {

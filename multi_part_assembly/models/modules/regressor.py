@@ -32,7 +32,7 @@ def normalize_rot6d(rot):
 class PoseRegressor(nn.Module):
     """MLP-based regressor for translation and rotation prediction."""
 
-    def __init__(self, feat_dim, rot_type='quat'):
+    def __init__(self, feat_dim, rot_type='quat', norm_rot=True):
         super().__init__()
 
         if rot_type == 'quat':
@@ -42,6 +42,7 @@ class PoseRegressor(nn.Module):
         else:
             raise NotImplementedError(f'rotation {rot_type} is not supported')
         self.rot_type = rot_type
+        self.norm_rot = norm_rot
 
         self.fc_layers = nn.Sequential(
             nn.Linear(feat_dim, 256),
@@ -60,10 +61,11 @@ class PoseRegressor(nn.Module):
         """x: [B, C] or [B, P, C]"""
         f = self.fc_layers(x)
         rot = self.rot_head(f)  # [B, 4/6] or [B, P, 4/6]
-        if self.rot_type == 'quat':
-            rot = F.normalize(rot, p=2, dim=-1)
-        elif self.rot_type == 'rmat':
-            rot = normalize_rot6d(rot)
+        if self.norm_rot:
+            if self.rot_type == 'quat':
+                rot = F.normalize(rot, p=2, dim=-1)
+            elif self.rot_type == 'rmat':
+                rot = normalize_rot6d(rot)
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]
         return rot, trans
 
@@ -75,10 +77,11 @@ class VNPoseRegressor(nn.Module):
         should be rotation-invariant.
     """
 
-    def __init__(self, feat_dim, rot_type='rmat'):
+    def __init__(self, feat_dim, rot_type='rmat', norm_rot=True):
         super().__init__()
 
         assert rot_type == 'rmat', 'VN model only supports rotation matrix'
+        self.norm_rot = norm_rot
 
         # for rotation
         self.vn_fc_layers = nn.Sequential(
@@ -112,7 +115,8 @@ class VNPoseRegressor(nn.Module):
         # rotation
         rot_x = self.vn_fc_layers(x)  # [N, 128, 3]
         rot = self.rot_head(rot_x)  # [N, 2, 3]
-        rot = normalize_rot6d(rot)  # [N, 2, 3]
+        if self.norm_rot:
+            rot = normalize_rot6d(rot)  # [N, 2, 3]
         # translation
         trans_x = self.in_feats(x).flatten(-2, -1)  # [N, C*3]
         trans_x = self.fc_layers(trans_x)  # [N, 128]
@@ -127,8 +131,8 @@ class VNPoseRegressor(nn.Module):
 class StocasticPoseRegressor(PoseRegressor):
     """Stochastic pose regressor with noise injection."""
 
-    def __init__(self, feat_dim, noise_dim, rot_type='quat'):
-        super().__init__(feat_dim + noise_dim, rot_type)
+    def __init__(self, feat_dim, noise_dim, rot_type='quat', norm_rot=True):
+        super().__init__(feat_dim + noise_dim, rot_type, norm_rot)
 
         self.noise_dim = noise_dim
 

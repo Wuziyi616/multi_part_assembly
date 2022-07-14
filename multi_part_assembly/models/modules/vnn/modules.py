@@ -3,6 +3,8 @@
 import torch
 import torch.nn as nn
 
+from pytorch3d.transforms import rotation_6d_to_matrix as rot6d_to_matrix
+
 EPS = 1e-6
 
 
@@ -203,10 +205,12 @@ class VNInFeature(nn.Module):
         dim=4,
         share_nonlinearity=False,
         negative_slope=0.2,
+        use_rmat=False,
     ):
         super().__init__()
 
         self.dim = dim
+        self.use_rmat = use_rmat
         self.vn1 = VNLinearBNLeakyReLU(
             in_channels,
             in_channels // 2,
@@ -221,7 +225,8 @@ class VNInFeature(nn.Module):
             share_nonlinearity=share_nonlinearity,
             negative_slope=negative_slope,
         )
-        self.vn_lin = conv1x1(in_channels // 4, 3, dim=dim)
+        self.vn_lin = conv1x1(
+            in_channels // 4, 3 if self.use_rmat else 2, dim=dim)
 
     def forward(self, x):
         """
@@ -233,7 +238,11 @@ class VNInFeature(nn.Module):
         """
         z = self.vn1(x)
         z = self.vn2(z)
-        z = self.vn_lin(z)
+        z = self.vn_lin(z)  # [B, 3, 3, N] or [B, 2, 3, N]
+        if self.use_rmat:
+            z = z.flatten(1, 2).transpose(1, 2).contiguous()  # [B, N, 6]
+            z = rot6d_to_matrix(z)  # [B, N, 3, 3]
+            z = z.permute(0, 2, 3, 1)  # [B, 3, 3, N]
         z = z.transpose(1, 2).contiguous()
 
         if self.dim == 4:
@@ -269,11 +278,15 @@ class VNEqFeature(VNInFeature):
             z = self.vn1(x)
             z = self.vn2(z)
             z = self.vn_lin(z)
+            if self.use_rmat:
+                z = z.flatten(1, 2).transpose(1, 2).contiguous()  # [B, N, 6]
+                z = rot6d_to_matrix(z)  # [B, N, 3, 3]
+                z = z.permute(0, 2, 3, 1)  # [B, 3, 3, N]
             self.z = z
             z = z.transpose(1, 2).contiguous()
         # map to equivariant
         else:
-            z = self.z
+            z = self.z.contiguous()
             self.z = None
 
         if self.dim == 4:
