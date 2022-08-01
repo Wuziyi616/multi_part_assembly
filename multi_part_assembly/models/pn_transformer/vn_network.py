@@ -166,6 +166,7 @@ class VNPNTransformerV2(VNPNTransformer):
         # to [B, 2, 3, P]
         rot = rot.transpose(1, 2).unflatten(1, (2, 3)).contiguous()
         rot = self.feats_can(rot)  # [B, 2, 3, P], equivariant
+        rot = rot.permute(0, 3, 1, 2).contiguous()  # [B, P, 2, 3]
         rot = self._wrap_rotation(rot)
 
         pred_dict = {

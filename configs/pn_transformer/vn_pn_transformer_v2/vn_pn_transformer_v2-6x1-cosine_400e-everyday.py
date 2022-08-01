@@ -6,20 +6,17 @@ _base_ = {
     'exp': '../../_base_/default_exp.py',
     'data': '../../_base_/datasets/breaking_bad/everyday.py',
     'optimizer': '../../_base_/schedules/adam_cosine.py',
-    'model': '../../_base_/models/pn_transformer/vn_pn_transformer.py',
+    'model': '../../_base_/models/pn_transformer/vn_pn_transformer_v2.py',
     'loss': '../../_base_/models/loss/geometric_loss.py',
 }
 
 # Miscellaneous configs
 _C = CN()
 
-_C.model = CN()
-_C.model.name = 'vn_pn_transformer_v2'
-
 _C.exp = CN()
 _C.exp.num_epochs = 400
-_C.exp.batch_size = 6  # GPU memory limit on RTX6000 with 24GB memory
-_C.exp.num_workers = 6
+_C.exp.batch_size = 4  # GPU memory limit on RTX6000 with 24GB memory
+_C.exp.num_workers = 4
 
 _C.optimizer = CN()
 _C.optimizer.warmup_ratio = 0.05

@@ -1,0 +1,18 @@
+"""VN-PointNet-Transformer model."""
+
+from yacs.config import CfgNode as CN
+
+_C = CN()
+_C.name = 'vn_pn_transformer_v2'
+_C.rot_type = 'rmat'
+_C.pc_feat_dim = 48  # use a smaller one because VN feature is 3xC
+_C.model.rmat_can = False  # use a rmat to canonicalize the part feature
+
+_C.encoder = 'vn-pointnet'
+
+_C.transformer_heads = 4
+_C.transformer_layers = 2
+
+
+def get_cfg_defaults():
+    return _C.clone()

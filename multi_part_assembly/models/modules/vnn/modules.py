@@ -226,7 +226,7 @@ class VNInFeature(nn.Module):
             negative_slope=negative_slope,
         )
         self.vn_lin = conv1x1(
-            in_channels // 4, 3 if self.use_rmat else 2, dim=dim)
+            in_channels // 4, 2 if self.use_rmat else 3, dim=dim)
 
     def forward(self, x):
         """
