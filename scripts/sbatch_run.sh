@@ -68,5 +68,5 @@ python $PY_FILE $PY_ARGS >> $LOG_FILE                # the script above, with it
 sbatch run-${SLRM_NAME}.slrm
 
 # delete it
-sleep 1
+sleep 0.1
 rm -f run-${SLRM_NAME}.slrm

@@ -14,6 +14,11 @@ _C.min_num_part = 2
 _C.max_num_part = 20
 _C.shuffle_parts = False
 _C.overfit = -1
+_C.all_category = [
+    'BeerBottle', 'Bowl', 'Cup', 'DrinkingUtensil', 'Mug', 'Plate', 'Spoon',
+    'Teacup', 'ToyFigure', 'WineBottle', 'Bottle', 'Cookie', 'DrinkBottle',
+    'Mirror', 'PillBottle', 'Ring', 'Statue', 'Teapot', 'Vase', 'WineGlass'
+]
 _C.colors = [
     [0, 204, 0],
     [204, 0, 0],

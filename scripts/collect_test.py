@@ -40,16 +40,11 @@ def test(cfg):
     )
 
     # iterate over all per-category trained models
-    # TODO: currently we hard-code to support Breaking Bad dataset
-    all_category = [
-        'BeerBottle', 'Bowl', 'Cup', 'DrinkingUtensil', 'Mug', 'Plate',
-        'Spoon', 'Teacup', 'ToyFigure', 'WineBottle', 'Bottle', 'Cookie',
-        'DrinkBottle', 'Mirror', 'PillBottle', 'Ring', 'Statue', 'Teapot',
-        'Vase', 'WineGlass'
-    ]
+    all_category = cfg.data.all_category
     all_metrics = {
         'rot_rmse': 1.,
         'rot_mae': 1.,
+        'geo_rot': 1.,
         'trans_rmse': 100.,
         'trans_mae': 100.,
         'transform_pt_cd_loss': 1000.,
@@ -81,8 +76,7 @@ def test(cfg):
             results = model.test_results
             results = {k[5:]: v.cpu().numpy() for k, v in results.items()}
             for metric in all_metrics.keys():
-                all_results[cat][metric].append(results[metric] *
-                                                all_metrics[metric])
+                all_results[cat][metric].append(results[metric])
     # average over `dup` runs
     for cat in all_category:
         for metric in all_metrics.keys():
@@ -97,7 +91,8 @@ def test(cfg):
     for metric, result in all_results.items():
         print(f'{metric}:')
         result = result.tolist()
-        result.append(np.nanmean(result).round(1))  # per-category mean
+        # per-category mean, scale it for scientific notation
+        result.append(np.nanmean(result).round(1) * all_metrics[metric])
         result = [str(res) for res in result]
         print(' & '.join(result))
 
