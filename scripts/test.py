@@ -50,14 +50,13 @@ def test(cfg):
         results = model.test_results
         results = {k[5:]: v.detach().cpu().numpy() for k, v in results.items()}
         for metric in all_metrics.keys():
-            all_results[metric].append(results[metric])
+            all_results[metric].append(results[metric] * all_metrics[metric])
     all_results = {k: np.array(v).round(1) for k, v in all_results.items()}
     # format for latex table
     for metric, result in all_results.items():
         print(f'{metric}:')
         result = result.tolist()
-        # per-category mean, scale it for scientific notation
-        result.append(np.mean(result).round(1) * all_metrics[metric])
+        result.append(np.mean(result).round(1))  # per-category mean
         result = [str(res) for res in result]
         print(' & '.join(result))
 

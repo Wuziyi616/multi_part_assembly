@@ -62,10 +62,18 @@ python scripts/test.py --cfg_file $CFG --weight path/to/weight --category all
 
 We will print the metrics on each category and the averaged results.
 
-We also provide script to test your per-category trained models (currently only support `everyday` subset of the Breaking-Bad dataset). Suppose you train the models by running `./scrips/train_everyday_categories.sh $COMMAND $CFG.py`. Then the model checkpoint will be saved in `checkpoint/$CFG-$CATEGORY-dup$X`. To collect the performance on each category, run:
+We also provide script to gather results trained under multiple random seeds. Suppose you train the models per category by running `./scrips/train_everyday_categories.sh $COMMAND $CFG.py`. Then the model checkpoint will be saved in `checkpoint/$CFG-$CATEGORY-dup$X`. To collect the performance on each category, run:
 
 ```
 python scripts/collect_test.py --cfg_file $CFG.py --num_dup $X --ckp_suffix checkpoint/$CFG-
+```
+
+The per-category results will be formatted into latex table style for the ease of paper writing.
+
+Besides, if you train the models on all categories by running `GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./scripts/dup_run_sbatch.sh $PARTITION $JOB_NAME ./scripts/train.py $CFG --other_args...`. Then the model checkpoint will be saved in `checkpoint/$CFG-dup$X`. To collect the performance, simply adding a `--train_all` flag:
+
+```
+python scripts/collect_test.py --cfg_file $CFG.py --num_dup $X --ckp_suffix checkpoint/$CFG- --train_all
 ```
 
 You can again control the number of pieces and GPUs to use.

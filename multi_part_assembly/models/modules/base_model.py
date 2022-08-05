@@ -92,12 +92,16 @@ class BaseModel(pl.LightningModule):
     def test_epoch_end(self, outputs):
         # avg_loss among all data
         # we need to consider different batch_size
-        func = torch.tensor if \
-            isinstance(outputs[0]['batch_size'], int) else torch.stack
-        batch_sizes = func([output.pop('batch_size') for output in outputs
-                            ]).type_as(outputs[0]['loss'])  # [num_batches]
+        if isinstance(outputs[0]['batch_size'], int):
+            func_bs = torch.tensor
+            func_loss = torch.stack
+        else:
+            func_bs = torch.cat
+            func_loss = torch.cat
+        batch_sizes = func_bs([output.pop('batch_size') for output in outputs
+                               ]).type_as(outputs[0]['loss'])  # [num_batches]
         losses = {
-            f'test/{k}': torch.stack([output[k] for output in outputs])
+            f'test/{k}': func_loss([output[k] for output in outputs])
             for k in outputs[0].keys()
         }  # each is [num_batches], stacked avg loss in each batch
         avg_loss = {

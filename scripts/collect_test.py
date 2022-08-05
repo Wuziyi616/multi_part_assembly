@@ -39,8 +39,6 @@ def test(cfg):
         strategy='dp' if len(all_gpus) > 1 else None,
     )
 
-    # iterate over all per-category trained models
-    all_category = cfg.data.all_category
     all_metrics = {
         'rot_rmse': 1.,
         'rot_mae': 1.,
@@ -50,6 +48,34 @@ def test(cfg):
         'transform_pt_cd_loss': 1000.,
         'part_acc': 100.,
     }
+
+    # performance on all categories
+    if args.train_all:
+        all_results = {metric: [] for metric in all_metrics.keys()}
+        ckp_suffix = f'{args.ckp_suffix}dup'
+        _, val_loader = build_dataloader(cfg)
+        for i in range(1, args.num_dup + 1, 1):
+            ckp_folder = f'{ckp_suffix}{i}/models'
+            try:
+                ckp_path = find_last_ckp(ckp_folder)
+            except AssertionError:
+                continue
+            trainer.test(model, val_loader, ckpt_path=ckp_path)
+            results = model.test_results
+            results = {k[5:]: v.cpu().numpy() for k, v in results.items()}
+            for metric in all_metrics.keys():
+                all_results[metric].append(results[metric] *
+                                           all_metrics[metric])
+        # average over `dup` runs
+        for metric in all_metrics.keys():
+            all_results[metric] = np.mean(all_results[metric]).round(1)
+            print(f'{metric}: {all_results[metric]}')
+        # format for latex table
+        result = [str(all_results[metric]) for metric in all_metrics.keys()]
+        print(' & '.join(result))
+
+    # iterate over all categories
+    all_category = cfg.data.all_category
     all_results = {
         cat: {metric: []
               for metric in all_metrics.keys()}
@@ -65,7 +91,13 @@ def test(cfg):
             continue
         # iterate over all dup-trained models
         # 'dup1', 'dup2', 'dup3', ...
-        ckp_suffix = f'{args.ckp_suffix}{cat}-dup'
+        # if the model is trained on all categories together
+        # then there is only one weight
+        if args.train_all:
+            ckp_suffix = f'{args.ckp_suffix}dup'
+        # else there is one weight per category
+        else:
+            ckp_suffix = f'{args.ckp_suffix}{cat}-dup'
         for i in range(1, args.num_dup + 1, 1):
             ckp_folder = f'{ckp_suffix}{i}/models'
             try:
@@ -76,7 +108,8 @@ def test(cfg):
             results = model.test_results
             results = {k[5:]: v.cpu().numpy() for k, v in results.items()}
             for metric in all_metrics.keys():
-                all_results[cat][metric].append(results[metric])
+                all_results[cat][metric].append(results[metric] *
+                                                all_metrics[metric])
     # average over `dup` runs
     for cat in all_category:
         for metric in all_metrics.keys():
@@ -91,8 +124,7 @@ def test(cfg):
     for metric, result in all_results.items():
         print(f'{metric}:')
         result = result.tolist()
-        # per-category mean, scale it for scientific notation
-        result.append(np.nanmean(result).round(1) * all_metrics[metric])
+        result.append(np.nanmean(result).round(1))  # per-category mean
         result = [str(res) for res in result]
         print(' & '.join(result))
 
@@ -107,6 +139,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_dup', type=int, default=3)
     parser.add_argument('--ckp_suffix', type=str, required=True)
     parser.add_argument('--gpus', nargs='+', default=[0], type=int)
+    parser.add_argument(
+        '--train_all', action='store_true', help='trained on all categories')
     args = parser.parse_args()
 
     sys.path.append(os.path.dirname(args.cfg_file))

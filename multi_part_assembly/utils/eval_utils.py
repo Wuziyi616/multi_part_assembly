@@ -1,4 +1,5 @@
 import copy
+import math
 
 import torch
 
@@ -220,7 +221,7 @@ def rot_geodesic_dist(rot1, rot2, valids):
     quat2 = rot2.to_quat()
     metric_per_data = 2. * torch.acos((quat1 * quat2).sum(dim=-1).abs())
     metric_per_data = _valid_mean(metric_per_data, valids)
-    return metric_per_data
+    return metric_per_data * 180. / math.pi  # to degree
 
 
 @torch.no_grad()
