@@ -4,14 +4,13 @@ import pytorch_lightning as pl
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-from scipy.spatial.transform import Rotation as R
 
-from multi_part_assembly.utils import rot_pc, transform_pc, Rotation3D
+from multi_part_assembly.utils import transform_pc, Rotation3D
 from multi_part_assembly.utils import colorize_part_pc, filter_wd_parameters
 from multi_part_assembly.utils import trans_l2_loss, rot_points_cd_loss, \
     shape_cd_loss, rot_cosine_loss, rot_points_l2_loss, chamfer_distance
 from multi_part_assembly.utils import calc_part_acc, calc_connectivity_acc, \
-    trans_metrics, rot_metrics, rot_geodesic_dist, relative_pose_metrics
+    trans_metrics, rot_metrics
 from multi_part_assembly.utils import CosineAnnealingWarmupRestarts
 
 
@@ -53,7 +52,6 @@ class BaseModel(pl.LightningModule):
 
         # loss configs
         self.sample_iter = self.cfg.loss.get('sample_iter', 1)
-        self.num_rot = self.cfg.loss.get('num_rot', 1)
 
     def forward(self, data_dict):
         """Forward pass to predict poses for each part."""
@@ -136,7 +134,7 @@ class BaseModel(pl.LightningModule):
         loss_dict = self.loss_function(data_dict, optimizer_idx=optimizer_idx)
 
         # in training we log for every step
-        if mode == 'train':
+        if mode == 'train' and self.local_rank == 0:
             log_dict = {f'{mode}/{k}': v.item() for k, v in loss_dict.items()}
             data_name = [
                 k for k in self.trainer.profiler.recorded_durations.keys()
@@ -144,7 +142,8 @@ class BaseModel(pl.LightningModule):
             ][0]
             log_dict[f'{mode}/data_time'] = \
                 self.trainer.profiler.recorded_durations[data_name][-1]
-            self.log_dict(log_dict, logger=True, sync_dist=False)
+            self.log_dict(
+                log_dict, logger=True, sync_dist=False, rank_zero_only=True)
 
         return loss_dict
 
@@ -238,48 +237,6 @@ class BaseModel(pl.LightningModule):
         new_gt_rot = self._wrap_rotation(new_gt_rot_tensor)
         return new_gt_trans, new_gt_rot
 
-    @torch.no_grad()
-    def _match_rotation(self, pred_trans, pred_rot, gt_trans, gt_rot, valids):
-        """Used in geometric assembly. Match GT to predictions.
-
-        Since objects in geometric assembly are often symmetric, we rotate the
-            GT and match the prediction. We use trans MSE as the criterion.
-
-        Args:
-            pred/gt_trans: [B, P, 3]
-            pred/gt_rot: [B, P, 4/(3, 3)], Rotation3D, quat or rmat
-            valids: [B, P], 1 for input parts, 0 for padded parts
-
-        Returns:
-            GT poses after rearrangement
-        """
-        if self.num_rot == 1:
-            return gt_trans.detach().clone(), gt_rot.detach().clone()
-        P = pred_trans.shape[1]
-        # uniform rotation along z-axis
-        if not hasattr(self, '_uniform_z_rot'):
-            z_angles = 360. / self.num_rot * np.arange(self.num_rot)
-            z_rot = [
-                R.from_euler('z', angle, degrees=True).as_matrix()
-                for angle in z_angles
-            ]
-            self._uniform_z_rot = torch.from_numpy(np.stack(z_rot, 0))[None]
-        z_rot = self._uniform_z_rot.type_as(gt_trans)  # [1, n, 3, 3]
-        # rotate `gt_trans`, [B, n, P, 3]
-        rot_gt_trans = (z_rot.unsqueeze(2)
-                        @ gt_trans.unsqueeze(1).unsqueeze(-1)).squeeze(-1)
-        trans_loss = (rot_gt_trans - pred_trans.unsqueeze(1)).pow(2).sum(-1)
-        valids = valids.unsqueeze(1).float()
-        trans_loss = (trans_loss * valids).sum(-1) / valids.sum(-1)  # [B, n]
-        # take the min rotation for each data in the batch
-        min_idx = trans_loss.argmin(1)  # [B]
-        min_z_rot = z_rot[0][min_idx].unsqueeze(1).repeat(1, P, 1, 1)
-        min_z_rot = Rotation3D(min_z_rot, rot_type='rmat')
-        # rotate the GTs
-        new_gt_trans = rot_pc(min_z_rot, gt_trans)
-        new_gt_rot = gt_rot.apply_rotation(min_z_rot)
-        return new_gt_trans, new_gt_rot
-
     def _calc_loss(self, out_dict, data_dict):
         """Calculate loss by matching GT to prediction.
 
@@ -295,10 +252,10 @@ class BaseModel(pl.LightningModule):
             new_trans, new_rot = self._match_parts(part_pcs, pred_trans,
                                                    pred_rot, gt_trans, gt_rot,
                                                    match_ids)
-        # rotate the object for lowest translation MSE in geometric assembly
+        # do nothing in geometric assembly
         else:
-            new_trans, new_rot = self._match_rotation(pred_trans, pred_rot,
-                                                      gt_trans, gt_rot, valids)
+            new_trans, new_rot = \
+                gt_trans.detach().clone(), gt_rot.detach().clone()
 
         # computing loss
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
@@ -312,7 +269,19 @@ class BaseModel(pl.LightningModule):
             new_rot,
             valids,
             ret_pts=True,
-            training=self.training,
+            training=self.semantic or self.training,
+            # TODO: divide the SCD loss by the real number of parts (False) or
+            # TODO: a fixed padding number (e.g. 20 in PartNet) (True)
+            # In semantic assembly, we follow DGL to divide by padding number.
+            # During training, it serves as hard negative mining; while it's
+            # also valid during testing because all the shapes have the same
+            # `max_num_part` value. So we always set `training=True` here.
+            # In geometric assembly, we do hard negative mining during training
+            # too, but divide SCD by the real number of parts during testing,
+            # which is also the results reported in the Breaking Bad paper.
+            # This is because the number of parts here could vary, e.g. we have
+            # ablation study on different number of parts (paper Table 4).
+            # See the docstring of this loss function for more details.
         )
         loss_dict = {
             'trans_loss': trans_loss,
@@ -367,12 +336,6 @@ class BaseModel(pl.LightningModule):
                     pred_trans, gt_trans, valids, metric=metric)
                 metric_dict[f'rot_{metric}'] = rot_metrics(
                     pred_rot, gt_rot, valids, metric=metric)
-            metric_dict['geo_rot'] = rot_geodesic_dist(pred_rot, gt_rot,
-                                                       valids)
-            # relative pose metrics
-            relative_metric_dict = relative_pose_metrics(
-                pred_trans, gt_trans, pred_rot, gt_rot, valids)
-            metric_dict.update(relative_metric_dict)
         return metric_dict
 
     def _loss_function(self, data_dict, out_dict={}, optimizer_idx=-1):

@@ -2,6 +2,10 @@
 
 ## Training
 
+**Please go throught the `scripts/train.py` file and modify some training configurations according to items marked by `TODO`**, e.g. disable DDP training, handle cluster/slurm-related settings.
+
+See [model](./model.md) for details about the baselines supported in this codebase.
+
 To train a model, simply run:
 
 ```
@@ -12,7 +16,7 @@ For example, to train the Global baseline model on PartNet chair, replace `$CFG`
 Other optional arguments include:
 
 -   `--category`: train the model only on a subset of data, e.g. `Chair`, `Table`, `Lamp` on PartNet
--   `--gpus`: setting training GPUs, note that by default we are using DP training. Please modify `scripts/train.py` to enable DDP training
+-   `--gpus`: setting training GPUs, note that by default we are using DDP supported by PyTorch-Lightning
 -   `--weight`: loading pre-trained weights
 -   `--fp16`: FP16 mixed precision training
 -   `--cudnn`: setting `cudnn.benchmark = True`
@@ -21,20 +25,20 @@ Other optional arguments include:
 ### Logging
 
 We use [wandb](https://wandb.ai/site) for logging.
-Please set up your account on the machine before running training commands.
+Please set up your account with `wandb login` on the machine before running training commands.
 
 ### Helper Scripts
 
 Script for configuring and submitting jobs to cluster SLURM system:
 
 ```
-GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal ./scripts/sbatch_run.sh $PARTITION $JOB_NAME ./scripts/train.py --cfg_file $CFG --other_args...
+GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=5 QOS=normal ./scripts/sbatch_run.sh $PARTITION $JOB_NAME ./scripts/train.py --cfg_file $CFG --other_args...
 ```
 
 Script for running a job multiple times over different random seeds:
 
 ```
-GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./scripts/dup_run_sbatch.sh $PARTITION $JOB_NAME ./scripts/train.py $CFG --other_args...
+GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./scripts/dup_run_sbatch.sh $PARTITION $JOB_NAME ./scripts/train.py $CFG --other_args...
 ```
 
 We also provide scripts for training on single/all categories of the Breaking-Bad dataset's `everyday` subset.
@@ -70,7 +74,7 @@ python scripts/collect_test.py --cfg_file $CFG.py --num_dup $X --ckp_suffix chec
 
 The per-category results will be formatted into latex table style for the ease of paper writing.
 
-Besides, if you train the models on all categories by running `GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./scripts/dup_run_sbatch.sh $PARTITION $JOB_NAME ./scripts/train.py $CFG --other_args...`. Then the model checkpoint will be saved in `checkpoint/$CFG-dup$X`. To collect the performance, simply adding a `--train_all` flag:
+Besides, if you train the models on all categories by running `GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=5 QOS=normal REPEAT=$NUM_REPEAT ./scripts/dup_run_sbatch.sh $PARTITION $JOB_NAME ./scripts/train.py $CFG --other_args...`. Then the model checkpoint will be saved in `checkpoint/$CFG-dup$X`. To collect the performance, simply adding a `--train_all` flag:
 
 ```
 python scripts/collect_test.py --cfg_file $CFG.py --num_dup $X --ckp_suffix checkpoint/$CFG- --train_all

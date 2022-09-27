@@ -37,6 +37,11 @@ You can train, test and visualize the results using our provided config files, o
 We explain our code design in [tutorial.md](docs/tutorial.md).
 Please read it before modifying the codebase or implementing your new algorithms.
 
+## Benchmark
+
+We benchmark the baselines and report them in [model.md](docs/model.md).
+We also present detailed instructions on how to reproduce our results.
+
 ## License
 
 This project is released under the [MIT license](LICENSE).

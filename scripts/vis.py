@@ -35,10 +35,7 @@ def visualize(cfg):
         batch = {k: v.float().cuda() for k, v in batch.items()}
         out_dict = model(batch)  # trans/rot: [B, P, 3/4/(3, 3)]
         loss_dict, _ = model.module._calc_loss(out_dict, batch)  # loss is [B]
-        # TODO: the criterion to select examples
-        # loss = -loss_dict['part_acc']
-        # loss = loss_dict['trans_mae'] + loss_dict['rot_mae'] / 1000.
-        # loss = loss_dict['transform_pt_cd_loss']
+        # the criterion to cherry-pick examples
         loss = loss_dict['rot_pt_l2_loss'] + loss_dict['trans_mae']
         # convert all the rotations to quaternion for simplicity
         out_dict = {

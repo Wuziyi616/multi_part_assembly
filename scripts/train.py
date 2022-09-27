@@ -4,6 +4,7 @@ import pwd
 import argparse
 import importlib
 
+import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -26,11 +27,14 @@ def main(cfg):
     ckp_dir = os.path.join(cfg.exp.ckp_dir, cfg_name, 'models')
     os.makedirs(os.path.dirname(ckp_dir), exist_ok=True)
 
-    # on clusters, quota is limited
-    # soft link temp space for checkpointing
+    # on clusters, quota under user dir is usually limited
+    # soft link to save the weights in temp space for checkpointing
     # TODO: modify this if you are not running on clusters
-    if SLURM_JOB_ID and os.path.isdir('/checkpoint/'):
+    CHECKPOINT_DIR = '/checkpoint/'  # ''
+    if SLURM_JOB_ID and CHECKPOINT_DIR and os.path.isdir(CHECKPOINT_DIR):
         if not os.path.exists(ckp_dir):
+            # on my cluster, the temp dir is /checkpoint/$USER/$SLURM_JOB_ID
+            # TODO: modify this if your cluster is different
             usr = pwd.getpwuid(os.getuid())[0]
             os.system(r'ln -s /checkpoint/{}/{}/ {}'.format(
                 usr, SLURM_JOB_ID, ckp_dir))
@@ -39,10 +43,10 @@ def main(cfg):
 
     # it's not good to hard-code the wandb id
     # but on preemption clusters, we want the job to resume the same wandb
-    # process after resuming training
+    # process after resuming training (i.e. drawing the same graph)
     # so we have to keep the same wandb id
     # TODO: modify this if you are not running on preemption clusters
-    preemption = True
+    preemption = True  # False
     if SLURM_JOB_ID and preemption:
         logger_id = logger_name = f'{cfg_name}-{SLURM_JOB_ID}'
     else:
@@ -101,7 +105,15 @@ def main(cfg):
         print(f'INFO: automatically detect checkpoint {last_ckp}')
         ckp_path = os.path.join(ckp_dir, last_ckp)
     elif cfg.exp.weight_file:
-        ckp_path = cfg.exp.weight_file
+        # check if it has trainint states, or just a model weight
+        ckp = torch.load(cfg.exp.weight_file, map_location='cpu')
+        # if it has, then it's a checkpoint compatible with pl
+        if 'state_dict' in ckp.keys():
+            ckp_path = cfg.exp.weight_file
+        # if it's just a weight, then manually load it to the model
+        else:
+            ckp_path = None
+            model.load_state_dict(ckp)
     else:
         ckp_path = None
 
@@ -125,9 +137,11 @@ if __name__ == '__main__':
     cfg = importlib.import_module(os.path.basename(args.cfg_file)[:-3])
     cfg = cfg.get_cfg_defaults()
 
-    # TODO: modify this line if you can run DDP on the cluster
-    parallel_strategy = 'dp'  # 'ddp'
+    # TODO: modify this if you cannot run DDP training, and want to use DP
+    parallel_strategy = 'ddp'  # 'dp'
     cfg.exp.gpus = args.gpus
+    # manually increase batch_size according to the number of GPUs in DP
+    # not necessary in DDP because it's already per-GPU batch size
     if len(cfg.exp.gpus) > 1 and parallel_strategy == 'dp':
         cfg.exp.batch_size *= len(cfg.exp.gpus)
         cfg.exp.num_workers *= len(cfg.exp.gpus)

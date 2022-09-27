@@ -6,15 +6,16 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal ./scripts/sbatch_run.sh rtx6000 train-sbatch \
+#     GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=5 QOS=normal ./scripts/sbatch_run.sh rtx6000 train-sbatch \
 #       ./scripts/train.py --cfg_file config.py
 #######################################################################
 
 # read args from command line
 GPUS=${GPUS:-1}
-CPUS_PER_TASK=${CPUS_PER_TASK:-8}
+CPUS_PER_GPU=${CPUS_PER_GPU:-8}
 MEM_PER_CPU=${MEM_PER_CPU:-5}
 QOS=${QOS:-normal}
+TIME=${TIME:-0}
 
 PY_ARGS=${@:4}
 PARTITION=$1
@@ -25,6 +26,7 @@ SLRM_NAME="${JOB_NAME/\//"_"}"
 LOG_DIR=checkpoint/$JOB_NAME
 DATETIME=$(date "+%Y-%m-%d_%H:%M:%S")
 LOG_FILE=$LOG_DIR/${DATETIME}.log
+CPUS_PER_TASK=$((GPUS * CPUS_PER_GPU))
 
 # set up log output folder
 mkdir -p $LOG_DIR
@@ -39,15 +41,13 @@ echo "#!/bin/bash
 #SBATCH --open-mode=append
 #SBATCH --partition=$PARTITION                       # self-explanatory, set to your preference (e.g. gpu or cpu on MaRS, p100, t4, or cpu on Vaughan)
 #SBATCH --cpus-per-task=$CPUS_PER_TASK               # self-explanatory, set to your preference
-#SBATCH --ntasks=$GPUS
-#SBATCH --ntasks-per-node=$GPUS
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=${MEM_PER_CPU}G                # self-explanatory, set to your preference
 #SBATCH --gres=gpu:$GPUS                             # NOTE: you need a GPU for CUDA support; self-explanatory, set to your preference 
 #SBATCH --nodes=1
-#SBATCH --qos=$QOS                                   # for 'high' and 'deadline' QoS, refer to https://support.vectorinstitute.ai/AboutVaughan2
-
-# link /checkpoint to current folder
-# ln -sfn /checkpoint/\$USER/\$SLURM_JOB_ID $LOG_DIR
+#SBATCH --qos=$QOS                                   # self-explanatory, set to your preference
+#SBATCH --time=$TIME                                 # running time limit, 0 as unlimited
 
 # log some necessary environment params
 echo \$SLURM_JOB_ID >> $LOG_FILE                      # log the job id

@@ -22,11 +22,14 @@ For other data items, see comments in the [dataset files](../multi_part_assembly
 ## Model
 
 Shape assembly models usually consist of a point cloud feature extractor (e.g. PointNet), a relationship reasoning module (e.g. GNNs), and a pose predictor (usually implemented as MLPs).
+See [model](./model.md) for details about the baselines supported in this codebase.
 
 ### Base Model
 
 We implement a `BaseModel` class as an instance of PyTorch-Lightning's `LightningModule`, which support general methods such as `training/validation/test_step/epoch_end()`.
 It also implements general loss computation, metrics calculation, and visualization during training.
+See [base_model.py](../multi_part_assembly/models/modules/base_model.py).
+Below we detail some core methods we implement for all assembly models.
 
 ### Assembly Models
 
@@ -68,9 +71,10 @@ See `_match_parts()` method of `BaseModel` class.
 ### Geometric Assembly
 
 Usually, there is no geometrically equivalent parts in this setting.
-However, sometimes it is hard to define a canonical pose for objects due to symmetry.
-Therefore, we develop a rotation matching step to minimize the loss.
-We rotate the ground-truth object along Z-axis for different angles and select one as the new ground-truth.
+So we don't need to perform the matching GT step.
+
+**Remark**: It is actually very hard to define a _canonical_ pose for objects under the geometric assembly setting, due to e.g. symmetry of a bottle/vase.
+See `dev` branch for our experimental features in solving this issue.
 
 ## Metrics
 
@@ -80,15 +84,8 @@ Please refer to Section 4.3 of the [paper](https://arxiv.org/pdf/2006.07793.pdf)
 For geometric assembly, we adopt SCD and PA, as well as MSE/RMSE/MAE between translations and rotations.
 Please refer to Section 6.1 of the [paper](https://arxiv.org/pdf/2205.14886.pdf) for more details.
 
-**Experimental**:
-
--   As pointed out by some papers (e.g. [this](https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf)), MSE between rotations is not a good metric.
-    Therefore, we adopt the geodesic distance between two rotations as another metric.
-    See `rot_geodesic_dist()` function in [eval_utils.py](../multi_part_assembly/utils/eval_utils.py).
--   For objects without a clear canonical pose, we compute the relative pose errors.
-    Suppose there are 10 parts in a shape.
-    Every time we treat 1 part as canonical, and calculate the relative poses between the other 9 parts to it.
-    We repeat this process for 10 times, and take the min error as the final result.
+**Remark**: As discussed above, these metrics are sometimes problematic due to the symmetry ambiguity.
+See `dev` branch for experimental metrics that are robust under this setting.
 
 ## Rotation Representation
 
@@ -97,8 +94,9 @@ Please refer to Section 6.1 of the [paper](https://arxiv.org/pdf/2205.14886.pdf)
 -   For ease of data batching, we always represent rotations as quaternions from the dataloaders.
     However, to build a compatible interface for util functions, model input-output, we wrap the predicted rotations in a `Rotation3D` class, which supports common format conversion and tensor operations.
     See [rotation.py](../multi_part_assembly/utils/rotation.py) for detailed definitions
--   Other rotation representation we support:
-    -   6D representation (rotation matrix): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html).
+-   Rotation representations we support (change `_C.rot_type` under `model` field to use different rotation representations):
+    -   Quaternion (`quat`), by default
+    -   6D representation (rotation matrix, `rmat`): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html).
         The predicted `6`-len tensor will be reshaped to `(2, 3)`, and the third row is obtained via cross product.
         Then, the 3 vectors will be stacked along the `-2`-th dim.
         In a `Rotation3D` object, the 6D representation will be converted to a 3x3 rotation matrix

@@ -4,7 +4,7 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 _C.dataset = 'partnet'
-_C.data_dir = '../Generative-3D-Part-Assembly/prepare_data'
+_C.data_dir = './data/partnet'
 _C.data_fn = 'Chair.{}.npy'
 _C.category = 'Chair'  # actually useless
 _C.data_keys = ('part_ids', 'match_ids', 'contact_points')

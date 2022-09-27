@@ -17,7 +17,7 @@ _C.exp = CN()
 _C.exp.val_every = 5  # to be the same as DGL
 
 _C.data = CN()
-_C.data.data_keys = ('part_ids', 'instance_label', 'valid_matrix')
+_C.data.data_keys = ('part_ids', 'valid_matrix')
 
 
 def get_cfg_defaults():

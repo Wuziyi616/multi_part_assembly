@@ -39,14 +39,14 @@ def test(cfg):
         strategy='dp' if len(all_gpus) > 1 else None,
     )
 
+    # TODO: modify this to fit in the metrics you want to report
     all_metrics = {
         'rot_rmse': 1.,
         'rot_mae': 1.,
-        'geo_rot': 1.,
-        'trans_rmse': 100.,
-        'trans_mae': 100.,
-        'transform_pt_cd_loss': 1000.,
-        'part_acc': 100.,
+        'trans_rmse': 100.,  # presented as \times 1e-2 in the table
+        'trans_mae': 100.,  # presented as \times 1e-2 in the table
+        'transform_pt_cd_loss': 1000.,  # presented as \times 1e-3 in the table
+        'part_acc': 100.,  # presented in % in the table
     }
 
     # performance on all categories
@@ -71,8 +71,13 @@ def test(cfg):
             all_results[metric] = np.mean(all_results[metric]).round(1)
             print(f'{metric}: {all_results[metric]}')
         # format for latex table
+        print('\n##############################################')
+        print('Results averaged over all categories:')
         result = [str(all_results[metric]) for metric in all_metrics.keys()]
         print(' & '.join(result))
+
+        if not hasattr(cfg.data, 'all_category'):
+            return
 
     # iterate over all categories
     all_category = cfg.data.all_category
@@ -121,12 +126,23 @@ def test(cfg):
     }
     all_results = {k: np.array(v).round(1) for k, v in all_results.items()}
     # format for latex table
+    # per-category results
+    print('\n##############################################')
+    print('Results per category:')
     for metric, result in all_results.items():
         print(f'{metric}:')
         result = result.tolist()
         result.append(np.nanmean(result).round(1))  # per-category mean
         result = [str(res) for res in result]
         print(' & '.join(result))
+        all_results[metric] = result
+    # averaged over all categories
+    print('\n##############################################')
+    print('Results averaged over all categories:')
+    all_metric_names = list(all_metrics.keys())
+    result = [str(all_results[metric][-1]) for metric in all_metric_names]
+    print(' & '.join(all_metric_names))
+    print(' & '.join(result))
 
     print('Done testing...')
 

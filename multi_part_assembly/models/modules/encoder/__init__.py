@@ -1,4 +1,4 @@
-from .pointnet import PointNet, VNPointNet
+from .pointnet import PointNet
 from .dgcnn import DGCNN
 from .pointnet2 import PointNet2SSG, PointNet2MSG
 
@@ -16,8 +16,6 @@ def build_encoder(arch, feat_dim, global_feat=True, **kwargs):
             model = PointNet2MSG(feat_dim)
         else:
             raise NotImplementedError(f'{arch} not supported')
-    elif arch == 'vn-pointnet':
-        model = VNPointNet(feat_dim, global_feat=global_feat, **kwargs)
     else:
         raise NotImplementedError(f'{arch} is not supported')
     return model
