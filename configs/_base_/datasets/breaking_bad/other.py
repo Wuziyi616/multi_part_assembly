@@ -4,7 +4,7 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 _C.dataset = 'geometry'
-_C.data_dir = '/scratch/ssd004/scratch/ziyiwu/data/assembly'
+_C.data_dir = './data/breaking_bad'
 _C.data_fn = 'other.{}.txt'
 _C.data_keys = ('part_ids', )
 _C.category = ''  # empty means all categories

@@ -15,7 +15,7 @@ _C = CN()
 
 _C.exp = CN()
 _C.exp.num_epochs = 400
-_C.exp.batch_size = 6  # GPU memory limit on RTX6000 with 24GB memory
+_C.exp.batch_size = 6  # VN models are very memory-consuming
 _C.exp.num_workers = 6
 
 _C.optimizer = CN()

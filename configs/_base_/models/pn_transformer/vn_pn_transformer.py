@@ -6,6 +6,7 @@ _C = CN()
 _C.name = 'vn_pn_transformer'
 _C.rot_type = 'rmat'
 _C.pc_feat_dim = 48  # use a smaller one because VN feature is 3xC
+_C.rmat_can = False  # use a rmat to canonicalize the part feature
 
 _C.encoder = 'vn-pointnet'
 

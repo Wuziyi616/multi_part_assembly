@@ -5,15 +5,16 @@
 
 #######################################################################
 # An example usage:
-#     GPUS=1 CPUS_PER_TASK=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch.sh \
-#       rtx6000 test-sbatch test.py config.py --fp16 --cudnn
+#     GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=5 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch.sh \
+#       rtx6000 test-sbatch ./scripts/train.py config.py --fp16 --cudnn
 #######################################################################
 
 # read args from command line
 GPUS=${GPUS:-1}
-CPUS_PER_TASK=${CPUS_PER_TASK:-8}
+CPUS_PER_GPU=${CPUS_PER_GPU:-8}
 MEM_PER_CPU=${MEM_PER_CPU:-5}
 QOS=${QOS:-normal}
+TIME=${TIME:-0}
 REPEAT=${REPEAT:-3}
 
 PY_ARGS=${@:5}

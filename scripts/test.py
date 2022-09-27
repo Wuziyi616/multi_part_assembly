@@ -31,15 +31,16 @@ def test(cfg):
         return
 
     # if `args.category` is 'all', we also compute per-category results
+    # TODO: modify this to fit in the metrics you want to report
     all_category = cfg.data.all_category
     all_metrics = {
         'rot_rmse': 1.,
         'rot_mae': 1.,
         'geo_rot': 1.,
-        'trans_rmse': 100.,
-        'trans_mae': 100.,
-        'transform_pt_cd_loss': 1000.,
-        'part_acc': 100.,
+        'trans_rmse': 100.,  # presented as \times 1e-2 in the table
+        'trans_mae': 100.,  # presented as \times 1e-2 in the table
+        'transform_pt_cd_loss': 1000.,  # presented as \times 1e-3 in the table
+        'part_acc': 100.,  # presented in % in the table
     }
     all_results = {metric: [] for metric in all_metrics.keys()}
     for cat in all_category:

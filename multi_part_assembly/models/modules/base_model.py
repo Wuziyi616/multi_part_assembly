@@ -136,7 +136,7 @@ class BaseModel(pl.LightningModule):
         loss_dict = self.loss_function(data_dict, optimizer_idx=optimizer_idx)
 
         # in training we log for every step
-        if mode == 'train':
+        if mode == 'train' and self.local_rank == 0:
             log_dict = {f'{mode}/{k}': v.item() for k, v in loss_dict.items()}
             data_name = [
                 k for k in self.trainer.profiler.recorded_durations.keys()
@@ -144,7 +144,8 @@ class BaseModel(pl.LightningModule):
             ][0]
             log_dict[f'{mode}/data_time'] = \
                 self.trainer.profiler.recorded_durations[data_name][-1]
-            self.log_dict(log_dict, logger=True, sync_dist=False)
+            self.log_dict(
+                log_dict, logger=True, sync_dist=False, rank_zero_only=True)
 
         return loss_dict
 
@@ -312,7 +313,19 @@ class BaseModel(pl.LightningModule):
             new_rot,
             valids,
             ret_pts=True,
-            training=self.training,
+            training=self.semantic or self.training,
+            # TODO: divide the SCD loss by the real number of parts (False) or
+            # TODO: a fixed padding number (e.g. 20 in PartNet) (True)
+            # In semantic assembly, we follow DGL to divide by padding number.
+            # During training, it serves as hard negative mining; while it's
+            # also valid during testing because all the shapes have the same
+            # `max_num_part` value. So we always set `training=True` here.
+            # In geometric assembly, we do hard negative mining during training
+            # too, but divide SCD by the real number of parts during testing,
+            # which is also the results reported in the Breaking Bad paper.
+            # This is because the number of parts here could vary, e.g. we have
+            # ablation study on different number of parts (paper Table 4).
+            # See the docstring of this loss function for more details.
         )
         loss_dict = {
             'trans_loss': trans_loss,

@@ -22,11 +22,14 @@ For other data items, see comments in the [dataset files](../multi_part_assembly
 ## Model
 
 Shape assembly models usually consist of a point cloud feature extractor (e.g. PointNet), a relationship reasoning module (e.g. GNNs), and a pose predictor (usually implemented as MLPs).
+See [model](./model.md) for details about the baselines supported in this codebase.
 
 ### Base Model
 
 We implement a `BaseModel` class as an instance of PyTorch-Lightning's `LightningModule`, which support general methods such as `training/validation/test_step/epoch_end()`.
 It also implements general loss computation, metrics calculation, and visualization during training.
+See [base_model.py](../multi_part_assembly/models/modules/base_model.py).
+Below we detail some core methods we implement for all assembly models.
 
 ### Assembly Models
 
@@ -67,10 +70,20 @@ See `_match_parts()` method of `BaseModel` class.
 
 ### Geometric Assembly
 
-Usually, there is no geometrically equivalent parts in this setting.
+Usually, there is no geometrically equivalent parts in this setting, which means we do not need to match GT for loss computation.
+
+**Experimental**:
+
 However, sometimes it is hard to define a canonical pose for objects due to symmetry.
-Therefore, we develop a rotation matching step to minimize the loss.
-We rotate the ground-truth object along Z-axis for different angles and select one as the new ground-truth.
+In semantic assembly, for example for a chair, it is easy to align the chair's back with the negative X-axis and define this as the canonical pose for all chairs.
+However in geometric assembly, the canonical pose for a e.g. cylinder bottle/vase is ill-defined.
+
+Therefore, we borrow idea from the part matching step in semantic assembly and develop a rotation matching step to minimize the loss.
+We rotate the ground-truth object along Z-axis for different angles and select one as the new ground-truth, mitigating the effect of rotation symmetry ambiguity.
+See `_match_rotation()` method of `BaseModel` class.
+
+If you want to enable this matching step, change `_C.num_rot` under `loss` field to a positive int value larger than 1.
+E.g. if set `_C.num_rot = 12`, then the ground-truth object will be rotated 12 times along Z-axis (30 degree each time), and compare with the predicted assembly.
 
 ## Metrics
 
@@ -82,13 +95,18 @@ Please refer to Section 6.1 of the [paper](https://arxiv.org/pdf/2205.14886.pdf)
 
 **Experimental**:
 
+-   As discussed above, these metrics are sometimes problematic due to the symmetry ambiguity.
+    E.g., if we rotate a cylinder bottle by 5 degree along Z-axis, it is still perfectly assembled.
+    However, the MSE of both rotation and translation will give a non-zero error (even if we do rotation matching, if 5 degree is smaller than the granularity we check, the errors will not be eliminated).
+    Therefore, we propose to compute the relative pose errors.
+    Suppose there are 5 parts in a shape.
+    Every time we treat 1 part as canonical, and calculate the relative poses between the other 4 parts to it.
+    We repeat this process for 5 times, and take the min error as the final result.
+    This is because relative poses between parts will not be affected by global shape transformations.
+    See `relative_pose_metrics()` function in [eval_utils.py](../multi_part_assembly/utils/eval_utils.py).
 -   As pointed out by some papers (e.g. [this](https://www.cs.cmu.edu/~cga/dynopt/readings/Rmetric.pdf)), MSE between rotations is not a good metric.
     Therefore, we adopt the geodesic distance between two rotations as another metric.
     See `rot_geodesic_dist()` function in [eval_utils.py](../multi_part_assembly/utils/eval_utils.py).
--   For objects without a clear canonical pose, we compute the relative pose errors.
-    Suppose there are 10 parts in a shape.
-    Every time we treat 1 part as canonical, and calculate the relative poses between the other 9 parts to it.
-    We repeat this process for 10 times, and take the min error as the final result.
 
 ## Rotation Representation
 
@@ -97,8 +115,9 @@ Please refer to Section 6.1 of the [paper](https://arxiv.org/pdf/2205.14886.pdf)
 -   For ease of data batching, we always represent rotations as quaternions from the dataloaders.
     However, to build a compatible interface for util functions, model input-output, we wrap the predicted rotations in a `Rotation3D` class, which supports common format conversion and tensor operations.
     See [rotation.py](../multi_part_assembly/utils/rotation.py) for detailed definitions
--   Other rotation representation we support:
-    -   6D representation (rotation matrix): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html).
+-   Rotation representations we support (change `_C.rot_type` under `model` field to use different rotation representations):
+    -   Quaternion (`quat`), by default
+    -   6D representation (rotation matrix, `rmat`): see CVPR'19 [paper](https://zhouyisjtu.github.io/project_rotation/rotation.html).
         The predicted `6`-len tensor will be reshaped to `(2, 3)`, and the third row is obtained via cross product.
         Then, the 3 vectors will be stacked along the `-2`-th dim.
         In a `Rotation3D` object, the 6D representation will be converted to a 3x3 rotation matrix

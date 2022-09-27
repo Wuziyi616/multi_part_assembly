@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .vnn import VNLinear, VNLeakyReLU, VNInFeature
-
 
 def normalize_rot6d(rot):
     """Adopted from PyTorch3D.
@@ -67,64 +65,6 @@ class PoseRegressor(nn.Module):
             elif self.rot_type == 'rmat':
                 rot = normalize_rot6d(rot)
         trans = self.trans_head(f)  # [B, 3] or [B, P, 3]
-        return rot, trans
-
-
-class VNPoseRegressor(nn.Module):
-    """PoseRegressor for VN models.
-
-    Target rotation should be rotation-equivariant, while target translation
-        should be rotation-invariant.
-    """
-
-    def __init__(self, feat_dim, rot_type='rmat', norm_rot=True):
-        super().__init__()
-
-        assert rot_type == 'rmat', 'VN model only supports rotation matrix'
-        self.norm_rot = norm_rot
-
-        # for rotation
-        self.vn_fc_layers = nn.Sequential(
-            VNLinear(feat_dim, 256, dim=3),
-            VNLeakyReLU(256, dim=3, negative_slope=0.2),
-            VNLinear(256, 128, dim=3),
-            VNLeakyReLU(128, dim=3, negative_slope=0.2),
-        )
-
-        # Rotation prediction head
-        # we use the 6D representation from the CVPR'19 paper
-        self.rot_head = VNLinear(128, 2, dim=3)  # [2, 3] --> 6
-
-        # for translation
-        self.in_feats = VNInFeature(feat_dim, dim=3)
-        self.fc_layers = nn.Sequential(
-            nn.Linear(feat_dim * 3, 256),
-            nn.LeakyReLU(0.2),
-            nn.Linear(256, 128),
-            nn.LeakyReLU(0.2),
-        )
-
-        # Translation prediction head
-        self.trans_head = nn.Linear(128, 3)
-
-    def forward(self, x):
-        """x: [B, C, 3] or [B, P, C, 3]"""
-        unflatten = len(x.shape) == 4
-        B, C = x.shape[0], x.shape[-2]
-        x = x.view(-1, C, 3)
-        # rotation
-        rot_x = self.vn_fc_layers(x)  # [N, 128, 3]
-        rot = self.rot_head(rot_x)  # [N, 2, 3]
-        if self.norm_rot:
-            rot = normalize_rot6d(rot)  # [N, 2, 3]
-        # translation
-        trans_x = self.in_feats(x).flatten(-2, -1)  # [N, C*3]
-        trans_x = self.fc_layers(trans_x)  # [N, 128]
-        trans = self.trans_head(trans_x)  # [N, 3]
-        # back to [B, P]
-        if unflatten:
-            rot = rot.unflatten(0, (B, -1))
-            trans = trans.unflatten(0, (B, -1))
         return rot, trans
 
 

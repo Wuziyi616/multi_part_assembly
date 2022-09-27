@@ -11,6 +11,8 @@ conda create -n assembly python=3.8
 conda activate assembly
 # pytorch
 conda install pytorch=1.10 torchvision torchaudio cudatoolkit=11.3 -c pytorch
+# pytorch-lightning
+conda install pytorch-lightning=1.6.2
 # pytorch3d
 conda install -c fvcore -c iopath -c conda-forge fvcore iopath
 conda install pytorch3d -c pytorch3d
