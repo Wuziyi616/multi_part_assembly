@@ -68,14 +68,14 @@ We also provide a variant that adopts the iterative refinement process as in DGL
 
 -   Results on PartNet chair:
 
-|                                                            Method                                                             | Shape Chamfer (SCD) ↓ | Part Accuracy (%) ↑ | Connectivity Accuracy (%) |
-| :---------------------------------------------------------------------------------------------------------------------------: | :-------------------: | :-----------------: | :-----------------------: |
-|                             [Global](../configs/global/global-32x1-cosine_200e-partnet_chair.py)                              |        0.0128         |        23.82        |           16.29           |
-|                                [LSTM](../configs/lstm/lstm-32x1-cosine_200e-partnet_chair.py)                                 |        0.0114         |        22.03        |           14.88           |
-|                                  [DGL](../configs/dgl/dgl-32x1-cosine_300e-partnet_chair.py)                                  |        0.0079         |        40.56        |           27.58           |
-|                            [RGL-NET](../configs/rgl_net/rgl_net-32x1-cosine_300e-partnet_chair.py)                            |        0.0068         |        44.24        |           29.38           |
-|           [Transformer](../configs/pn_transformer/pn_transformer/pn_transformer-32x1-cosine_400e-partnet_chair.py)            |        0.0089         |        41.90        |           29.11           |
-| [Refine-Transformer](../configs/pn_transformer/pn_transformer_refine/pn_transformer_refine-32x1-cosine_400e-partnet_chair.py) |        0.0079         |        42.97        |           31.25           |
+|                                                            Method                                                             | Shape Chamfer (SCD) $\downarrow$ | Part Accuracy (%) $\uparrow$ | Connectivity Accuracy (%) $\uparrow$ |
+| :---------------------------------------------------------------------------------------------------------------------------: | :------------------------------: | :--------------------------: | :----------------------------------: |
+|                             [Global](../configs/global/global-32x1-cosine_200e-partnet_chair.py)                              |              0.0128              |            23.82             |                16.29                 |
+|                                [LSTM](../configs/lstm/lstm-32x1-cosine_200e-partnet_chair.py)                                 |              0.0114              |            22.03             |                14.88                 |
+|                                  [DGL](../configs/dgl/dgl-32x1-cosine_300e-partnet_chair.py)                                  |              0.0079              |            40.56             |                27.58                 |
+|                            [RGL-NET](../configs/rgl_net/rgl_net-32x1-cosine_300e-partnet_chair.py)                            |              0.0068              |            44.24             |                29.38                 |
+|           [Transformer](../configs/pn_transformer/pn_transformer/pn_transformer-32x1-cosine_400e-partnet_chair.py)            |              0.0089              |            41.90             |                29.11                 |
+| [Refine-Transformer](../configs/pn_transformer/pn_transformer_refine/pn_transformer_refine-32x1-cosine_400e-partnet_chair.py) |              0.0079              |            42.97             |                31.25                 |
 
 See [wandb report](https://wandb.ai/dazitu616/Multi-Part-Assembly/reports/Benchmark-on-PartNet-Chair-Assembly--VmlldzoyNzI0NTg5?accessToken=zhov8augcax9ud8rvwemv3k9n120i2hvnjiskms6o2nx1esd3xkz8o18l55ugxhv) for detailed training logs.
 
@@ -89,7 +89,14 @@ Then, you can go to wandb to find the results.
 
 ### Geometric Assembly
 
--   Results on Breaking Bad Dataset: see our [paper](https://openreview.net/forum?id=mJWt6pOcHNy)
+-   Results on Breaking Bad Dataset (see our [paper](https://openreview.net/forum?id=mJWt6pOcHNy) for more results)
+
+|                             Method                              | RMSE (R) $\downarrow$ | MAE (R) $\downarrow$ | RMSE (T) $\downarrow$ | MAE (T) $\downarrow$ | CD $\downarrow$  | PA $\uparrow$ |
+| :-------------------------------------------------------------: | :-------------------: | :------------------: | :-------------------: | :------------------: | :--------------: | :-----------: |
+|                                                                 |        degree         |        degree        |   $\times 10^{-2}$    |   $\times 10^{-2}$   | $\times 10^{-3}$ |       %       |
+| [Global](../configs/global/global-32x1-cosine_200e-everyday.py) |         80.7          |         68.0         |         15.1          |         12.0         |       14.6       |     24.6      |
+|    [LSTM](../configs/lstm/lstm-32x1-cosine_200e-everyday.py)    |         84.2          |         72.4         |         16.2          |         12.6         |       15.8       |     22.7      |
+|     [DGL](../configs/dgl/dgl-32x1-cosine_200e-everyday.py)      |         79.4          |         66.5         |         15.0          |         11.9         |       14.3       |     31.0      |
 
 **To reproduce our main results on the everyday subset (paper Table 3)**, take DGL for example, please run:
 
@@ -126,3 +133,15 @@ GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=4 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch
 ```
 
 Then, you can use the same script to collect the results as detailed above (add a `--train_all` flag because the model is trained on all categories jointly).
+
+-   Results on the [volume constrained version](https://github.com/Breaking-Bad-Dataset/Breaking-Bad-Dataset.github.io#volume-constrained-version-new) of Breaking Bad Dataset
+
+| Method | RMSE (R) $\downarrow$ | MAE (R) $\downarrow$ | RMSE (T) $\downarrow$ | MAE (T) $\downarrow$ | CD $\downarrow$  | PA $\uparrow$ |
+| :----: | :-------------------: | :------------------: | :-------------------: | :------------------: | :--------------: | :-----------: |
+|        |        degree         |        degree        |   $\times 10^{-2}$    |   $\times 10^{-2}$   | $\times 10^{-3}$ |       %       |
+| Global |         80.5          |         67.4         |         14.6          |         11.7         |       13.0       |     28.7      |
+|  LSTM  |         82.7          |         70.1         |         15.1          |         11.9         |       13.3       |     27.5      |
+|  DGL   |         80.3          |         67.0         |         13.9          |         11.1         |       11.8       |     31.6      |
+
+Compared to the original data, the performance of baselines improves in all the metrics.
+This is expected, as we eliminate those chip-like small fracture pieces, and make the dataset more balanced.
