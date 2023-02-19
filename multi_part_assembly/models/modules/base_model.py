@@ -261,7 +261,7 @@ class BaseModel(pl.LightningModule):
         trans_loss = trans_l2_loss(pred_trans, new_trans, valids)
         rot_pt_cd_loss = rot_points_cd_loss(part_pcs, pred_rot, new_rot,
                                             valids)
-        transform_pt_cd_loss, gt_trans_pts, pred_trans_pts = shape_cd_loss(
+        transform_pt_cd_loss, pred_trans_pts, gt_trans_pts = shape_cd_loss(
             part_pcs,
             pred_trans,
             new_trans,
