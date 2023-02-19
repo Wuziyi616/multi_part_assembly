@@ -19,6 +19,15 @@ We mainly focus on vision based 3D shape assembly task, which takes in point clo
 We carefully benchmark the models to match their performance in their original papers, which you can easily extend to new datasets.
 You can also leverage our codebase to develop your new shape assembly algorithms.
 
+## News & Updates
+
+-   2023.2: **BC-breaking change:** we update our mesh data as discussed in [issue#6](https://github.com/Wuziyi616/multi_part_assembly/issues/6).
+    This requires you to re-run [the decompression script](https://github.com/Breaking-Bad-Dataset/Breaking-Bad-Dataset.github.io/blob/main/decompress.py) to get a new version of data.
+    We have re-run the benchmark results, which are released [here](https://github.com/Wuziyi616/multi_part_assembly/blob/master/docs/model.md#geometric-assembly-with-inner-face-removed-data).
+    Overall, the differences are minor.
+-   2022.10: Code release.
+-   2022.9: The paper is accepted by NeurIPS 2022 Datasets and Benchmarks Track as a **Featured Paper Presentation**!
+
 ## Installation
 
 Please refer to [install.md](docs/install.md) for step-by-step guidance on how to install the packages and prepare the data.

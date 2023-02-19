@@ -80,7 +80,14 @@ Then, you can go to wandb to find the results.
 
 ### Geometric Assembly
 
--   Results on Breaking Bad Dataset: see our [paper](https://openreview.net/forum?id=mJWt6pOcHNy)
+-   Results on Breaking Bad Dataset (see our [paper](https://openreview.net/forum?id=mJWt6pOcHNy) for more results)
+
+|                             Method                              | RMSE (R) $\downarrow$ | MAE (R) $\downarrow$ | RMSE (T) $\downarrow$ | MAE (T) $\downarrow$ | CD $\downarrow$  | PA $\uparrow$ |
+| :-------------------------------------------------------------: | :-------------------: | :------------------: | :-------------------: | :------------------: | :--------------: | :-----------: |
+|                                                                 |        degree         |        degree        |   $\times 10^{-2}$    |   $\times 10^{-2}$   | $\times 10^{-3}$ |       %       |
+| [Global](../configs/global/global-32x1-cosine_200e-everyday.py) |         80.7          |         68.0         |         15.1          |         12.0         |       14.6       |     24.6      |
+|    [LSTM](../configs/lstm/lstm-32x1-cosine_200e-everyday.py)    |         84.2          |         72.4         |         16.2          |         12.6         |       15.8       |     22.7      |
+|     [DGL](../configs/dgl/dgl-32x1-cosine_200e-everyday.py)      |         79.4          |         66.5         |         15.0          |         11.9         |       14.3       |     31.0      |
 
 **To reproduce our main results on the everyday subset (paper Table 3)**, take DGL for example, please run:
 
@@ -117,3 +124,19 @@ GPUS=1 CPUS_PER_GPU=8 MEM_PER_CPU=4 QOS=normal REPEAT=3 ./scripts/dup_run_sbatch
 ```
 
 Then, you can use the same script to collect the results as detailed above (add a `--train_all` flag because the model is trained on all categories jointly).
+
+### Geometric Assembly with Inner-Face-Removed Data
+
+See [issue#6](https://github.com/Wuziyi616/multi_part_assembly/issues/6) for details on this data update.
+
+-   We re-run the models with the same scripts, and report the results below:
+
+| Method | RMSE (R) $\downarrow$ | MAE (R) $\downarrow$ | RMSE (T) $\downarrow$ | MAE (T) $\downarrow$ | CD $\downarrow$  | PA $\uparrow$ |
+| :----: | :-------------------: | :------------------: | :-------------------: | :------------------: | :--------------: | :-----------: |
+|        |        degree         |        degree        |   $\times 10^{-2}$    |   $\times 10^{-2}$   | $\times 10^{-3}$ |       %       |
+| Global |         82.4          |         69.7         |         14.8          |         11.8         |       15.0       |     21.8      |
+|  LSTM  |         84.7          |         72.7         |         16.2          |         12.7         |       17.1       |     19.4      |
+|  DGL   |         81.8          |         68.9         |         14.8          |         11.8         |       14.6       |     28.2      |
+
+Compared to the original results, the results on rotation and translation are similar, while there are notable changes in CD and PA.
+The change on PA is due to CD, because PA is computed by comparing CD with a pre-defined threshold.
