@@ -9,12 +9,11 @@ import numpy as np
 from tqdm import tqdm
 
 import torch
-import torch.nn as nn
 
 from multi_part_assembly.datasets import build_dataloader
 from multi_part_assembly.models import build_model
 from multi_part_assembly.utils import trans_rmat_to_pmat, trans_quat_to_pmat, \
-    quaternion_to_rmat, save_pc
+    quaternion_to_rmat, save_pc, Rotation3D
 
 
 @torch.no_grad()
@@ -23,7 +22,7 @@ def visualize(cfg):
     model = build_model(cfg)
     ckp = torch.load(cfg.exp.weight_file, map_location='cpu')
     model.load_state_dict(ckp['state_dict'])
-    model = nn.DataParallel(model).cuda().eval()
+    model = model.cuda().eval()
 
     # Initialize dataloaders
     _, val_loader = build_dataloader(cfg)
@@ -34,7 +33,10 @@ def visualize(cfg):
     for batch in tqdm(val_loader):
         batch = {k: v.float().cuda() for k, v in batch.items()}
         out_dict = model(batch)  # trans/rot: [B, P, 3/4/(3, 3)]
-        loss_dict, _ = model.module._calc_loss(out_dict, batch)  # loss is [B]
+        # compute loss to measure the quality of the predictions
+        batch['part_rot'] = Rotation3D(
+            batch['part_quat'], rot_type='quat').convert(model.rot_type)
+        loss_dict, _ = model._calc_loss(out_dict, batch)  # loss is [B]
         # the criterion to cherry-pick examples
         loss = loss_dict['rot_pt_l2_loss'] + loss_dict['trans_mae']
         # convert all the rotations to quaternion for simplicity
