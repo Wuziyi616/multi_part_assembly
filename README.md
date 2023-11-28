@@ -1,8 +1,8 @@
-# Multi Part Assembly
+# Multi-Part Shape Assembly
 
 ## Introduction
 
-This is an open-source 3D shape assembly codebase based on PyTorch + PyTorch-Lightning.
+This is an open-source 3D shape assembly codebase based on PyTorch + PyTorch-Lightning, released alongside the NeurIPS 2022 Dataset Paper: [Breaking Bad: A Dataset for Geometric Fracture and Reassembly](https://breaking-bad-dataset.github.io/).
 
 ### Major Features
 
