@@ -59,7 +59,7 @@ We also provide a variant that adopts the iterative refinement process as in DGL
 
 -   Results on PartNet chair:
 
-|                                                            Method                                                             | Shape Chamfer (SCD) ↓ | Part Accuracy (%) ↑ | Connectivity Accuracy (%) |
+|                                                            Method                                                             | Shape Chamfer (SCD) ↓ | Part Accuracy (%) ↑ | Connectivity Accuracy (%) ↑ |
 | :---------------------------------------------------------------------------------------------------------------------------: | :-------------------: | :-----------------: | :-----------------------: |
 |                             [Global](../configs/global/global-32x1-cosine_200e-partnet_chair.py)                              |        0.0128         |        23.82        |           16.29           |
 |                                [LSTM](../configs/lstm/lstm-32x1-cosine_200e-partnet_chair.py)                                 |        0.0114         |        22.03        |           14.88           |
